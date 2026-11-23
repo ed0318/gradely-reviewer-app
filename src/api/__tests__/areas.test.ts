@@ -63,16 +63,16 @@ afterEach(() => {
 });
 
 describe('auth', () => {
-  it('registers with snake_case fields, keeps the token and returns the user', async () => {
+  it('registers with email and password only, keeps the token and returns the user', async () => {
     answerWith(201, { success: true, message: 'Account created.', result: { token: 'jwt-1', token_type: 'bearer', expires_in: 3600, user: USER_PAYLOAD } });
     const { register } = await import('../auth');
 
-    const user = await register({ email: 'student@example.com', password: 'secret123', firstName: 'Ana', lastName: 'Cruz' });
+    const user = await register({ email: 'student@example.com', password: 'secret123' });
     expect(fetchCalls[0]).toEqual({
       path: '/auth/register',
       method: 'POST',
       authorization: null,
-      body: { email: 'student@example.com', password: 'secret123', first_name: 'Ana', last_name: 'Cruz' },
+      body: { email: 'student@example.com', password: 'secret123' },
     });
     expect(user).toEqual({
       id: 'user-1',
@@ -125,7 +125,8 @@ describe('auth', () => {
       ['PATCH', '/me', { first_name: 'Ann', last_name: 'Cruz' }],
       ['DELETE', '/me', undefined],
     ]);
-    expect(secureStore.has(TOKEN_KEY)).toBe(false);
+    // The session ends only once the person has seen the account is gone.
+    expect(secureStore.get(TOKEN_KEY)).toBe('jwt-1');
   });
 
   it('sends password reset requests without a token', async () => {

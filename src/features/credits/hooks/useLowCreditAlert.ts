@@ -46,5 +46,11 @@ export function useLowCreditAlert() {
     },
     setThresholdText: (value: string) => setThresholdText(value.replace(/\D/g, '').slice(0, 4)),
     saveThreshold: () => persist(isOn, thresholdText),
+    /** From the editor dialog: whole credits, typed. */
+    saveThresholdText: (value: string) => {
+      const digits = value.replace(/\D/g, '').slice(0, 4) || '0';
+      setThresholdText(digits);
+      persist(isOn, digits);
+    },
   };
 }

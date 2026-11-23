@@ -1,30 +1,19 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
-import { Icon, type IconName } from '@/components/Icon';
-import { color, font } from '@/theme/theme';
+import { Tabs } from 'expo-router/js-tabs';
+import { InTabs } from '@/components/Screen';
+import { TabBar } from '@/components/TabBar';
 
-const tabIcon = (name: IconName) =>
-  function TabIcon({ focused }: { focused: boolean }) {
-    return <Icon name={name} color={focused ? color.primary : color.inkMuted} />;
-  };
-
-/** Home, Topics, Progress, Credits, as in the mockup's bottom bar. */
+/** gradely-app's tabs: its own bar, and Settings opened from the picture in each tab's header. */
 export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: color.primary,
-        tabBarInactiveTintColor: color.inkMuted,
-        tabBarLabelStyle: { fontFamily: font.uiBold, fontSize: 11 },
-        tabBarStyle: { borderTopColor: color.line, backgroundColor: color.surface },
-        sceneStyle: { backgroundColor: color.canvas },
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
-      <Tabs.Screen name="topics" options={{ title: 'Topics', tabBarIcon: tabIcon('topics') }} />
-      <Tabs.Screen name="progress" options={{ title: 'Progress', tabBarIcon: tabIcon('progress') }} />
-      <Tabs.Screen name="credits" options={{ title: 'Credits', tabBarIcon: tabIcon('credits') }} />
-    </Tabs>
+    // `InTabs` tells `Screen` it is a tab, so it leaves the bottom inset to the tab bar.
+    <InTabs.Provider value>
+      <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, freezeOnBlur: true }}>
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="topics" />
+        <Tabs.Screen name="progress" />
+        <Tabs.Screen name="credits" />
+      </Tabs>
+    </InTabs.Provider>
   );
 }

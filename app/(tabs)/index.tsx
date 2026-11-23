@@ -1,42 +1,32 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { BrandLockup } from '@/components/BrandLockup';
+import { ScrollView, StyleSheet } from 'react-native';
 import { EmptyState } from '@/components/EmptyState';
-import { PaperScreen } from '@/components/PaperScreen';
-import { ProfileGreeting } from '@/features/account/components/ProfileGreeting';
+import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useUpNext } from '@/features/account/hooks/useUpNext';
-import { resolvePhotoUri } from '@/features/account/profilePhoto';
-import { CreditsPill } from '@/features/credits/components/CreditsPill';
 import { UpNextCard } from '@/features/exams/components/UpNextCard';
+import { buildGreeting } from '@/lib/personName';
 import { useSignedInSession } from '@/state/AccountProvider';
-import { useCredits } from '@/state/CreditsProvider';
+import { space } from '@/theme/theme';
 
-/** Mockup 2: the header (logo, credits, who is signed in) and Up next. Topics and exams follow in Phases 5–6. */
+/** Home: gradely-app's header (date, credits, picture), then Up next. Topics and exams follow in Phases 5–6. */
 export default function HomeScreen() {
-  const router = useRouter();
   const { profile } = useSignedInSession();
-  const { balanceUnits } = useCredits();
   const upNext = useUpNext();
+  const today = new Date();
+  const eyebrow = today.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
 
   return (
-    <PaperScreen>
-      <View style={styles.header}>
-        <BrandLockup />
-        <CreditsPill balanceUnits={balanceUnits} onPress={() => router.push('/credits')} />
-      </View>
-      <ProfileGreeting
-        firstName={profile.firstName}
-        lastName={profile.lastName}
-        photoUri={resolvePhotoUri(profile.photoPath)}
-        onPress={() => router.push('/settings')}
-      />
-      {upNext && <UpNextCard upNext={upNext} />}
-      <EmptyState icon="topics" title="No topics yet." body="Your topics and exams will show here." />
-    </PaperScreen>
+    <Screen>
+      <ScreenHeader eyebrow={eyebrow} title={`${buildGreeting(today).replace(',', '')}, ${profile.firstName}`} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {upNext && <UpNextCard upNext={upNext} />}
+        <EmptyState icon="topics" title="No topics yet" subtitle="Your topics and exams will show here." />
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  content: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: space.gap },
 });

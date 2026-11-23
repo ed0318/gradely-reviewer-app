@@ -8,7 +8,7 @@ import { color, font, radius } from '@/theme/theme';
 export function UpNextCard({ upNext }: { upNext: UpNextAttempt }) {
   return (
     <View style={styles.root} accessible accessibilityLabel={`Up next, ${formatScheduledAt(upNext.scheduledAt)}: ${upNext.examName}, ${upNext.itemCount} items`}>
-      <Icon name="calendar" color={color.clay} />
+      <Icon name="event" color={color.clay} />
       <View style={styles.words}>
         <Text style={styles.eyebrow}>UP NEXT · {formatScheduledAt(upNext.scheduledAt).toUpperCase()}</Text>
         <Text style={styles.title} numberOfLines={1}>

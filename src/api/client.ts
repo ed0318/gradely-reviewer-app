@@ -1,4 +1,5 @@
-import { API_URL, isApiConfigured, REQUEST_TIMEOUT_MS } from './config';
+import { API_URL, isApiConfigured, isApiMocked, REQUEST_TIMEOUT_MS } from './config';
+import { fetchFromMock } from './mock/mockTransport';
 import { ApiError, OfflineError, RequestCancelledError, SERVER_ERROR_MESSAGE, type ApiErrorCode, type FieldErrors } from './errors';
 import { endSession } from './session';
 import { readToken, saveToken } from './tokens';
@@ -93,7 +94,7 @@ async function sendOnce(path: string, options: RequestOptions, token: string | n
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  return fetchWithTimeout(`${API_URL}${path}${buildQueryString(options.query)}`, {
+  return fetchWithTimeout(`${path}${buildQueryString(options.query)}`, {
     method: options.method ?? 'GET',
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -104,7 +105,12 @@ async function sendOnce(path: string, options: RequestOptions, token: string | n
  * fetch with the timeout and the caller's abort joined. A timeout or a dropped
  * connection is offline; the caller's own abort is a cancellation.
  */
-async function fetchWithTimeout(url: string, init: RequestInit, options: Pick<RequestOptions, 'signal' | 'timeoutMs'>): Promise<Response> {
+/** The network, or the dummy server when EXPO_PUBLIC_API_MOCK is on. */
+function sendToServer(pathWithQuery: string, init: RequestInit): Promise<Response> {
+  return isApiMocked ? fetchFromMock(pathWithQuery, init) : fetch(`${API_URL}${pathWithQuery}`, init);
+}
+
+async function fetchWithTimeout(pathWithQuery: string, init: RequestInit, options: Pick<RequestOptions, 'signal' | 'timeoutMs'>): Promise<Response> {
   if (options.signal?.aborted) throw new RequestCancelledError();
 
   const controller = new AbortController();
@@ -113,7 +119,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, options: Pick<Re
   options.signal?.addEventListener('abort', abortFromCaller);
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await sendToServer(pathWithQuery, { ...init, signal: controller.signal });
   } catch {
     if (options.signal?.aborted) throw new RequestCancelledError();
     throw new OfflineError();
@@ -182,7 +188,7 @@ async function requestNewToken(): Promise<RefreshOutcome> {
   let response: Response;
   try {
     response = await fetchWithTimeout(
-      `${API_URL}/auth/refresh`,
+      '/auth/refresh',
       { method: 'POST', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } },
       {},
     );

@@ -1,24 +1,31 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Icon, type IconName } from '@/components/Icon';
+import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { color, font, radius } from '@/theme/theme';
+import { Icon, IconName } from './Icon';
 
-type InfoNoteProps = { text: string; icon?: IconName; tone?: 'info' | 'danger' };
-
-/** A tinted note with an icon: navy for information, red for what will be lost. */
-export function InfoNote({ text, icon = 'info', tone = 'info' }: InfoNoteProps) {
-  const isDanger = tone === 'danger';
+export function InfoNote({
+  text,
+  icon = 'info',
+  tone = 'neutral',
+  style,
+}: {
+  text: string;
+  icon?: IconName;
+  tone?: 'neutral' | 'danger';
+  style?: ViewStyle;
+}) {
+  const bg = tone === 'danger' ? color.rustTint : color.rule;
+  const fg = tone === 'danger' ? color.dangerInk : color.inkMuted;
+  const iconColor = tone === 'danger' ? color.rust : color.inkMuted;
   return (
-    <View style={[styles.root, isDanger ? styles.danger : styles.info]}>
-      <Icon name={icon} size={16} color={isDanger ? color.rust : color.primary} />
-      <Text style={[styles.text, { color: isDanger ? color.dangerInk : color.primary }]}>{text}</Text>
+    <View style={[styles.row, { backgroundColor: bg }, style]}>
+      <Icon name={icon} size={18} color={iconColor} />
+      <Text style={[styles.text, { color: fg }]}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flexDirection: 'row', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.card, alignItems: 'flex-start' },
-  info: { backgroundColor: color.primaryTint },
-  danger: { backgroundColor: color.rustTint, borderWidth: 1, borderColor: color.dangerTintOff },
-  text: { flex: 1, fontFamily: font.uiRegular, fontSize: 13, lineHeight: 19 },
+  row: { flexDirection: 'row', gap: 10, borderRadius: radius.card, padding: 14, paddingHorizontal: 16 },
+  text: { flex: 1, fontFamily: font.uiRegular, fontSize: 12.5, lineHeight: 19 },
 });

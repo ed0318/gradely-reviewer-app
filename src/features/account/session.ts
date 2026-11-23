@@ -15,6 +15,8 @@ import { deleteAllPhotoFiles } from './profilePhoto';
  */
 export type SessionState =
   | { kind: 'signed_out' }
+  /** Signed in and the phone is theirs, but the account has no name yet: onboarding asks for it. */
+  | { kind: 'onboarding'; account: AccountSnapshot; profile: Profile }
   | { kind: 'signed_in'; account: AccountSnapshot; profile: Profile }
   | { kind: 'handover'; account: AccountSnapshot; owner: PhoneOwner };
 
@@ -46,7 +48,7 @@ export async function establishSession(user: AccountUser): Promise<SessionState>
   const snapshot = toAccountSnapshot(user);
   await saveAccountSnapshot(snapshot);
   const state = await settlePhoneOwner(snapshot);
-  if (state.kind === 'signed_in') await queueWrite((database) => saveBalanceCache(database, user.balanceUnits, Date.now()));
+  if (state.kind !== 'handover') await queueWrite((database) => saveBalanceCache(database, user.balanceUnits, Date.now()));
   return state;
 }
 
@@ -78,7 +80,12 @@ async function settlePhoneOwner(account: AccountSnapshot): Promise<SessionState>
     photoPath: isSameOwner ? localProfile.photoPath : null,
   };
   await queueWrite((writer) => saveProfile(writer, profile));
-  return { kind: 'signed_in', account, profile };
+  return { kind: needsOnboarding(account) ? 'onboarding' : 'signed_in', account, profile };
+}
+
+/** An account made with email and password, or an Apple sign-in that shared no name, has none yet. */
+export function needsOnboarding(account: Pick<AccountSnapshot, 'firstName' | 'lastName'>): boolean {
+  return account.firstName.trim() === '' || account.lastName.trim() === '';
 }
 
 /** The hand-over's last step: the owner's data goes, and the signed-in account takes the phone. */

@@ -51,15 +51,11 @@ async function startSession(path: string, body: Record<string, unknown>): Promis
   return toAccountUser(session.user);
 }
 
-export type Registration = { email: string; password: string; firstName: string; lastName: string };
+/** Email and password only; the name is set afterwards by onboarding (`updateName`). */
+export type Registration = { email: string; password: string };
 
 export function register(registration: Registration): Promise<AccountUser> {
-  return startSession('/auth/register', {
-    email: registration.email,
-    password: registration.password,
-    first_name: registration.firstName,
-    last_name: registration.lastName,
-  });
+  return startSession('/auth/register', { email: registration.email, password: registration.password });
 }
 
 export function signIn(email: string, password: string): Promise<AccountUser> {
@@ -122,8 +118,10 @@ export async function updateName(firstName: string, lastName: string): Promise<A
   return toAccountUser(await requestResult<UserPayload>('/me', { method: 'PATCH', body: { first_name: firstName, last_name: lastName } }));
 }
 
-/** Deletes the account on the server, then ends the session here. */
+/**
+ * Deletes the account on the server. The session here is ended by the caller
+ * (`endSession('account_deleted')`) once the person has seen it worked, as in gradely-app.
+ */
 export async function deleteAccount(): Promise<void> {
   await requestResult('/me', { method: 'DELETE' });
-  await endSession('account_deleted');
 }

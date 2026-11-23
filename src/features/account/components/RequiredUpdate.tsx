@@ -2,7 +2,7 @@ import React from 'react';
 import { Linking, Platform, StyleSheet, Text } from 'react-native';
 import { AppIconTile } from '@/components/AppIconTile';
 import { Button } from '@/components/Button';
-import { PaperScreen } from '@/components/PaperScreen';
+import { AuthScreen } from '@/components/AuthScreen';
 import { color, font } from '@/theme/theme';
 import { INSTALLED_APP_VERSION } from '../hooks/useRequiredUpdate';
 
@@ -12,7 +12,7 @@ const STORE_URL = Platform.OS === 'android' ? 'market://details?id=ph.gradely.re
 /** Shown in place of the app when this version is below the server's minimum. */
 export function RequiredUpdate({ minimumVersion }: { minimumVersion: string }) {
   return (
-    <PaperScreen footer={<Button label="Update Gradely Reviewer" onPress={() => void Linking.openURL(STORE_URL)} />}>
+    <AuthScreen footer={<Button label="Update Gradely Reviewer" onPress={() => void Linking.openURL(STORE_URL)} />}>
       <AppIconTile size={52} />
       <Text style={styles.title} accessibilityRole="header">
         Time to update.
@@ -21,7 +21,7 @@ export function RequiredUpdate({ minimumVersion }: { minimumVersion: string }) {
         This version ({INSTALLED_APP_VERSION}) no longer works with your account. Update to version {minimumVersion} or newer to keep reviewing. Your
         topics and exams stay on this phone.
       </Text>
-    </PaperScreen>
+    </AuthScreen>
   );
 }
 

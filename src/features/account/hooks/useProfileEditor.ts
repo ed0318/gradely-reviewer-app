@@ -1,90 +1,157 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import { afterModalDismiss, useConfirmDelete } from '@/components/ConfirmDeleteModal';
+import { queueWrite } from '@/db/client';
+import { saveProfilePhotoPath } from '@/db/repositories/account';
 import { useAccount, useSignedInSession } from '@/state/AccountProvider';
 import { useIsMountedRef } from '@/state/useIsMountedRef';
-import { changeProfilePhoto, removeProfilePhoto, saveAccountName } from '../actions';
+import { deleteAccountOnServer, finishAccountDeletion, saveAccountName } from '../actions';
 import { describeAccountError } from '../describeAccountError';
-import { PhotoPermissionError, resolvePhotoUri, type PhotoSource } from '../profilePhoto';
+import { deletePhotoFile, pickProfilePhoto, PhotoPermissionError, resolvePhotoUri, type PhotoSource } from '../profilePhoto';
 
-/** Settings' profile card: the photo (kept on the phone) and the name (saved to the server). */
+/**
+ * gradely-app's profile screen: the picture and name are a draft until Save
+ * changes. The name goes to the account first (it needs a connection); the
+ * picture stays on this phone.
+ */
 export function useProfileEditor() {
   const { profile } = useSignedInSession();
   const { applyServerAccount, applyProfile } = useAccount();
   const isMountedRef = useIsMountedRef();
-  // Unsaved edits; null shows the saved name, so a name that arrives from the server appears unless mid-edit.
-  const [draftFirstName, setDraftFirstName] = useState<string | null>(null);
-  const [draftLastName, setDraftLastName] = useState<string | null>(null);
-  const [isSavingName, setIsSavingName] = useState(false);
-  const [nameMessage, setNameMessage] = useState<{ tone: 'error' | 'saved'; text: string } | null>(null);
-  const [isPhotoBusy, setIsPhotoBusy] = useState(false);
-  const firstName = draftFirstName ?? profile.firstName;
-  const lastName = draftLastName ?? profile.lastName;
+  const { confirmDelete, confirmModal } = useConfirmDelete();
+  const [firstName, setFirstName] = useState(profile.firstName);
+  const [lastName, setLastName] = useState(profile.lastName);
+  const [photoPath, setPhotoPath] = useState(profile.photoPath);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
 
-  const hasNameChanged = firstName.trim() !== profile.firstName || lastName.trim() !== profile.lastName;
-  const canSaveName = hasNameChanged && firstName.trim().length > 0 && lastName.trim().length > 0 && !isSavingName;
+  // A picture picked here and never saved is a file nothing points at; it goes when the screen does.
+  const draftPhotoRef = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (draftPhotoRef.current) deletePhotoFile(draftPhotoRef.current);
+    },
+    [],
+  );
 
-  const saveName = async () => {
-    if (!canSaveName) return;
-    setIsSavingName(true);
-    setNameMessage(null);
+  const isNameChanged = firstName.trim() !== profile.firstName || lastName.trim() !== profile.lastName;
+  const isPhotoChanged = photoPath !== profile.photoPath;
+  const isDirty = isNameChanged || isPhotoChanged;
+  const canSave = isDirty && !isSaving && firstName.trim().length > 0 && lastName.trim().length > 0;
+
+  const choosePhoto = async (source: PhotoSource) => {
     try {
-      const user = await saveAccountName(firstName, lastName);
-      await applyServerAccount(user);
-      if (isMountedRef.current) {
-        setDraftFirstName(null);
-        setDraftLastName(null);
-        setNameMessage({ tone: 'saved', text: 'Name saved.' });
-      }
+      const picked = await pickProfilePhoto(source);
+      if (!picked) return;
+      if (draftPhotoRef.current) deletePhotoFile(draftPhotoRef.current);
+      draftPhotoRef.current = picked;
+      setPhotoPath(picked);
+      setIsSaved(false);
     } catch (error) {
-      const text = describeAccountError(error, 'Saving your name needs a connection. Connect and try again.');
-      if (isMountedRef.current && text) setNameMessage({ tone: 'error', text });
-    } finally {
-      if (isMountedRef.current) setIsSavingName(false);
+      if (error instanceof PhotoPermissionError) return Alert.alert('Profile picture', error.message);
+      Alert.alert('That photo could not be saved', 'Try picking it again, or choose a different one.');
     }
   };
 
-  const runPhotoChange = async (change: () => Promise<typeof profile | null>) => {
-    setIsPhotoBusy(true);
-    try {
-      const nextProfile = await change();
-      if (nextProfile) applyProfile(nextProfile);
-    } catch (error) {
-      const message = error instanceof PhotoPermissionError ? error.message : 'That photo could not be saved. Try another one.';
-      if (!(error instanceof PhotoPermissionError)) console.warn('[reviewer] photo change failed', error);
-      Alert.alert('Profile photo', message);
-    } finally {
-      if (isMountedRef.current) setIsPhotoBusy(false);
-    }
-  };
-
-  const choosePhotoSource = () => {
+  const openPhotoMenu = () => {
     const buttons: Parameters<typeof Alert.alert>[2] = [
-      { text: 'Take a photo', onPress: () => void runPhotoChange(() => changeProfilePhoto(profile, 'camera' satisfies PhotoSource)) },
-      { text: 'Choose from gallery', onPress: () => void runPhotoChange(() => changeProfilePhoto(profile, 'library')) },
+      { text: 'Take a photo', onPress: () => void choosePhoto('camera') },
+      { text: 'Choose from gallery', onPress: () => void choosePhoto('library') },
     ];
-    if (profile.photoPath) buttons.push({ text: 'Remove photo', style: 'destructive', onPress: () => void runPhotoChange(() => removeProfilePhoto(profile)) });
+    if (photoPath) {
+      buttons.push({
+        text: 'Remove photo',
+        style: 'destructive',
+        onPress: () => {
+          setPhotoPath(null);
+          setIsSaved(false);
+        },
+      });
+    }
     buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert('Profile photo', 'Saved on this phone only.', buttons);
+    Alert.alert('Profile picture', 'Saved on this phone only.', buttons);
   };
+
+  const save = async () => {
+    if (!canSave) return;
+    setIsSaving(true);
+    try {
+      if (isNameChanged) await applyServerAccount(await saveAccountName(firstName, lastName));
+      if (isPhotoChanged) {
+        await queueWrite((database) => saveProfilePhotoPath(database, photoPath));
+        // The picture being replaced is only deleted once the new one is in.
+        if (profile.photoPath) deletePhotoFile(profile.photoPath);
+        draftPhotoRef.current = null;
+        applyProfile({ ...profile, firstName: firstName.trim(), lastName: lastName.trim(), photoPath });
+      }
+      if (isMountedRef.current) setIsSaved(true);
+    } catch (error) {
+      const message = describeAccountError(error, 'Connect to the internet and tap Save again. Nothing was changed yet.');
+      if (message) Alert.alert('Your name was not changed', message);
+    } finally {
+      if (isMountedRef.current) setIsSaving(false);
+    }
+  };
+
+  const confirmDeleteAccount = () =>
+    confirmDelete({
+      title: 'Delete your account?',
+      cascadeHeading: 'WHAT GOES WITH IT',
+      cascadeItems: [
+        { label: 'Your account', detail: `${profile.email}: sign-in and name` },
+        { label: 'Your credits', detail: 'Any credits left are lost, with their history.' },
+        { label: 'Everything on this phone', detail: 'Your topics, questions, exams, scores and picture are erased too.' },
+        { label: 'Signing up again won’t bring it back', detail: 'A new account is a different account. It starts empty.' },
+      ],
+      warning: 'This cannot be undone. Your account and everything on this phone are erased.',
+      confirmLabel: 'Delete for good',
+      confirmWord: 'DELETE',
+      onConfirm: () => {
+        setIsDeleting(true);
+        void deleteAccountOnServer()
+          .then(() => {
+            if (isMountedRef.current) setIsDeleted(true);
+          })
+          .catch((error: unknown) => {
+            const message = describeAccountError(error, 'Deleting your account needs a connection. Nothing was deleted.');
+            if (message) Alert.alert('Could not delete your account', message);
+          })
+          .finally(() => {
+            if (isMountedRef.current) setIsDeleting(false);
+          });
+      },
+    });
 
   return {
     email: profile.email,
-    photoUri: resolvePhotoUri(profile.photoPath),
+    photoUri: resolvePhotoUri(photoPath),
+    hasPhoto: photoPath !== null,
+    openPhotoMenu,
     firstName,
     lastName,
     setFirstName: (value: string) => {
-      setNameMessage(null);
-      setDraftFirstName(value);
+      setIsSaved(false);
+      setFirstName(value);
     },
     setLastName: (value: string) => {
-      setNameMessage(null);
-      setDraftLastName(value);
+      setIsSaved(false);
+      setLastName(value);
     },
-    canSaveName,
-    isSavingName,
-    nameMessage,
-    saveName: () => void saveName(),
-    isPhotoBusy,
-    choosePhotoSource,
+    isDirty,
+    canSave,
+    isSaving,
+    isSaved,
+    save: () => void save(),
+    isDeleting,
+    confirmDeleteAccount,
+    confirmModal,
+    isDeleted,
+    /** Dismiss the notice first, then end the session, which swaps this screen for sign-in. */
+    finishDeletion: () => {
+      setIsDeleted(false);
+      afterModalDismiss(() => void finishAccountDeletion());
+    },
   };
 }

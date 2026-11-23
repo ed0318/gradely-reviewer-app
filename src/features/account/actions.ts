@@ -1,5 +1,5 @@
 import {
-  deleteAccount as deleteAccountOnServer,
+  deleteAccount,
   register,
   signIn,
   signInWithApple,
@@ -9,6 +9,7 @@ import {
   type AccountUser,
   type Registration,
 } from '@/api/auth';
+import { endSession } from '@/api/session';
 import { queueWrite } from '@/db/client';
 import type { Profile } from '@/db/records';
 import { saveProfileName, saveProfilePhotoPath } from '@/db/repositories/account';
@@ -27,15 +28,9 @@ export async function signInWithEmail(email: string, password: string): Promise<
   return finishSignIn(await signIn(email.trim(), password));
 }
 
+/** Email and password only; onboarding asks for the name next. */
 export async function createAccount(registration: Registration): Promise<SignInResult> {
-  return finishSignIn(
-    await register({
-      email: registration.email.trim(),
-      password: registration.password,
-      firstName: registration.firstName.trim(),
-      lastName: registration.lastName.trim(),
-    }),
-  );
+  return finishSignIn(await register({ email: registration.email.trim(), password: registration.password }));
 }
 
 export async function continueWithGoogle(): Promise<SignInResult | null> {
@@ -76,12 +71,17 @@ export async function removeProfilePhoto(profile: Profile): Promise<Profile> {
   return { ...profile, photoPath: null };
 }
 
+/** Deletes the account on the server. The phone stays signed in until `finishAccountDeletion`. */
+export async function deleteAccountOnServer(): Promise<void> {
+  await deleteAccount();
+}
+
 /**
- * Deletes the account on the server, then this phone's copy of it: the
- * topics and exams belong to an account that no longer exists.
+ * After the person has seen the account is gone: this phone's copy goes too
+ * (the topics and exams belong to an account that no longer exists), then the session.
  */
-export async function deleteAccountAndLocalData(): Promise<void> {
-  await deleteAccountOnServer();
+export async function finishAccountDeletion(): Promise<void> {
   await endGoogleSession();
   await eraseLocalDataAndPhotos();
+  await endSession('account_deleted');
 }

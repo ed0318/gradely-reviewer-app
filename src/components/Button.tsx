@@ -14,11 +14,12 @@ type ButtonProps = {
   /** Spoken instead of `label` when the label alone is unclear. */
   accessibilityLabel?: string;
   leading?: React.ReactNode;
+  trailing?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 };
 
 /** Full-width action, 52 pt tall (44 pt for `quiet`), as in the mockup. */
-export function Button({ label, onPress, variant = 'primary', isBusy = false, isDisabled = false, accessibilityLabel, leading, style }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', isBusy = false, isDisabled = false, accessibilityLabel, leading, trailing, style }: ButtonProps) {
   const isInactive = isDisabled || isBusy;
   const look = VARIANT_LOOKS[variant];
   return (
@@ -44,6 +45,7 @@ export function Button({ label, onPress, variant = 'primary', isBusy = false, is
         <>
           {leading}
           <Text style={[styles.label, { color: isDisabled ? color.inkMuted : look.labelColor }]}>{label}</Text>
+          {!isDisabled && trailing}
         </>
       )}
     </Pressable>

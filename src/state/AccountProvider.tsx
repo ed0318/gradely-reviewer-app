@@ -4,7 +4,7 @@ import { isOfflineError, isRequestCancelled } from '@/api/errors';
 import { subscribeToSessionEnd } from '@/api/session';
 import type { Profile } from '@/db/records';
 import { saveAccountSnapshot } from '@/features/account/accountSnapshot';
-import { restoreSession, syncAccountFromServer, type SessionState } from '@/features/account/session';
+import { needsOnboarding, restoreSession, syncAccountFromServer, type SessionState } from '@/features/account/session';
 import { useCredits } from './CreditsProvider';
 
 /**
@@ -12,6 +12,13 @@ import { useCredits } from './CreditsProvider';
  * that change it live in src/features/account (session.ts, actions, hooks).
  */
 export type AccountSessionState = { kind: 'loading' } | SessionState;
+
+type OwnerSession = Extract<SessionState, { kind: 'signed_in' | 'onboarding' }>;
+
+/** Signed in on their own phone, whether or not onboarding is done. */
+export function isOwnerSession(session: AccountSessionState): session is OwnerSession {
+  return session.kind === 'signed_in' || session.kind === 'onboarding';
+}
 
 type AccountContextValue = {
   session: AccountSessionState;
@@ -33,7 +40,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     (next: SessionState, nextServerAccount: AccountUser | null = null) => {
       setSession(next);
       setServerAccount(nextServerAccount);
-      if (nextServerAccount && next.kind === 'signed_in') applyServerBalance(nextServerAccount.balanceUnits);
+      if (nextServerAccount && isOwnerSession(next)) applyServerBalance(nextServerAccount.balanceUnits);
     },
     [applyServerBalance],
   );
@@ -42,16 +49,21 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     async (user: AccountUser) => {
       setServerAccount(user);
       applyServerBalance(user.balanceUnits);
-      const current = session.kind === 'signed_in' ? session : null;
+      const current = isOwnerSession(session) ? session : null;
       if (!current || current.account.id !== user.id) return;
       const profile = await syncAccountFromServer(user, current.profile);
-      setSession((latest) => (latest.kind === 'signed_in' && latest.account.id === user.id ? { ...latest, account: { ...latest.account, ...user }, profile } : latest));
+      // A name arriving from the server (onboarding, or set on another phone) finishes onboarding.
+      setSession((latest) =>
+        isOwnerSession(latest) && latest.account.id === user.id
+          ? { kind: needsOnboarding(user) ? 'onboarding' : 'signed_in', account: { ...latest.account, ...user }, profile }
+          : latest,
+      );
     },
     [applyServerBalance, session],
   );
 
   const applyProfile = useCallback((profile: Profile) => {
-    setSession((latest) => (latest.kind === 'signed_in' ? { ...latest, profile } : latest));
+    setSession((latest) => (isOwnerSession(latest) ? { ...latest, profile } : latest));
   }, []);
 
   // Launch: read the stored session without waiting on the network.
@@ -71,7 +83,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Once signed in, refresh the account from the server in the background.
-  const signedInAccountId = session.kind === 'signed_in' ? session.account.id : null;
+  const signedInAccountId = isOwnerSession(session) ? session.account.id : null;
   const isServerAccountLoaded = serverAccount?.id === signedInAccountId;
   useEffect(() => {
     if (!signedInAccountId || isServerAccountLoaded) return;
@@ -111,9 +123,9 @@ export function useAccount(): AccountContextValue {
   return value;
 }
 
-/** The signed-in session, for screens that only render once signed in. */
-export function useSignedInSession() {
+/** The owner's session (signed in, or onboarding), for screens that only render then. */
+export function useSignedInSession(): OwnerSession {
   const { session } = useAccount();
-  if (session.kind !== 'signed_in') throw new Error('This screen needs a signed-in session.');
+  if (!isOwnerSession(session)) throw new Error('This screen needs a signed-in session.');
   return session;
 }

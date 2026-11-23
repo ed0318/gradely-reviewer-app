@@ -1,27 +1,43 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Icon, type IconName } from '@/components/Icon';
-import { color, font, radius } from '@/theme/theme';
+import { color, font } from '@/theme/theme';
+import { Icon, IconName } from './Icon';
 
-type EmptyStateProps = { icon: IconName; title: string; body: string; action?: React.ReactNode };
-
-/** What a list shows before it has anything in it. */
-export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
+/**
+ * The "nothing here yet" panel.
+ *
+ * `inline` is the same panel sized to sit inside a Card rather than to fill a
+ * screen — a section that is empty on an otherwise busy screen should not be
+ * claiming the height of one that has nothing on it at all.
+ */
+export function EmptyState({
+  icon,
+  title,
+  subtitle,
+  inline,
+}: {
+  icon: IconName;
+  title: string;
+  subtitle: string;
+  inline?: boolean;
+}) {
   return (
-    <View style={styles.root}>
-      <View style={styles.iconWell}>
-        <Icon name={icon} color={color.primary} />
+    <View style={inline ? styles.inlineRoot : styles.root}>
+      <View style={[styles.iconWrap, inline && styles.iconWrapInline]}>
+        <Icon name={icon} size={inline ? 21 : 26} color={color.primary} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.body}>{body}</Text>
-      {action}
+      <Text style={[styles.title, inline && styles.titleInline]}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'center', gap: 8, padding: 20, borderRadius: radius.card, borderWidth: 1, borderColor: color.line, backgroundColor: color.surface },
-  iconWell: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  title: { fontFamily: font.heading, fontSize: 18, color: color.ink, textAlign: 'center' },
-  body: { fontFamily: font.uiRegular, fontSize: 14, lineHeight: 20, color: color.inkMuted, textAlign: 'center' },
+  root: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 8 },
+  inlineRoot: { alignItems: 'center', paddingHorizontal: 28, paddingVertical: 24, gap: 6 },
+  iconWrap: { width: 56, height: 56, borderRadius: 999, backgroundColor: color.primaryTint, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  iconWrapInline: { width: 44, height: 44, marginBottom: 2 },
+  title: { fontFamily: font.title, fontSize: 20, color: color.ink, textAlign: 'center' },
+  titleInline: { fontSize: 17 },
+  subtitle: { fontFamily: font.rowSubtitle, fontSize: 13, color: color.inkMuted, textAlign: 'center' },
 });

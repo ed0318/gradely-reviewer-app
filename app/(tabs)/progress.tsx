@@ -1,14 +1,14 @@
 import React from 'react';
 import { EmptyState } from '@/components/EmptyState';
-import { PaperScreen } from '@/components/PaperScreen';
+import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 
 /** Placeholder until its phase is built. */
 export default function ProgressScreen() {
   return (
-    <PaperScreen>
-      <ScreenHeader title="Your progress." />
-      <EmptyState icon="progress" title="Nothing here yet." body="Scores from your exams will show here." />
-    </PaperScreen>
+    <Screen>
+      <ScreenHeader eyebrow="PROGRESS" title="Progress" />
+      <EmptyState icon="progress" title="Nothing here yet" subtitle="Scores from your exams will show here." />
+    </Screen>
   );
 }

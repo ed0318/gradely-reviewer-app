@@ -1,67 +1,123 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { PaperScreen } from '@/components/PaperScreen';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { DeleteAccountSection } from '@/features/account/components/DeleteAccountSection';
-import { ProfileCard } from '@/features/account/components/ProfileCard';
-import { useAccountExit } from '@/features/account/hooks/useAccountExit';
-import { LowCreditAlertRow } from '@/features/credits/components/LowCreditAlertRow';
+import { Avatar } from '@/components/Avatar';
+import { BackBar } from '@/components/BackBar';
+import { Card } from '@/components/Card';
+import { EditorDialog, Field } from '@/components/EditorDialog';
+import { Eyebrow } from '@/components/Eyebrow';
+import { Icon } from '@/components/Icon';
+import { Screen } from '@/components/Screen';
+import { SettingsRows } from '@/features/account/components/settings/SettingsRows';
+import { SettingsSection } from '@/features/account/components/settings/SettingsSection';
+import { useSignOut } from '@/features/account/hooks/useSignOut';
+import { INSTALLED_APP_VERSION } from '@/features/account/hooks/useRequiredUpdate';
+import { resolvePhotoUri } from '@/features/account/profilePhoto';
+import { useLowCreditAlert } from '@/features/credits/hooks/useLowCreditAlert';
 import { formatCredits } from '@/lib/creditUnits';
+import { buildFullName, buildInitials } from '@/lib/personName';
+import { useSignedInSession } from '@/state/AccountProvider';
 import { useCredits } from '@/state/CreditsProvider';
-import { IOS, IOS_DIM } from '@/theme/press';
-import { color, font, radius } from '@/theme/theme';
+import { color, font, radius, space } from '@/theme/theme';
 
-/** Mockup 13. Each exam's own reminder is listed here once scheduling exists (Phase 6). */
+/** gradely-app's Settings: the profile card, the account rows, folded groups, then Logout. */
 export default function SettingsScreen() {
   const router = useRouter();
+  const { profile } = useSignedInSession();
   const { balanceUnits } = useCredits();
-  const exit = useAccountExit();
+  const alert = useLowCreditAlert();
+  const signOut = useSignOut();
+  const [thresholdDraft, setThresholdDraft] = useState<string | null>(null);
+  const fullName = buildFullName(profile.firstName, profile.lastName);
 
   return (
-    <PaperScreen isRuled={false}>
-      <ScreenHeader title="Settings." onBack={router.back} />
-      <ProfileCard />
-
-      <Text style={styles.sectionTitle} accessibilityRole="header">
-        NOTIFICATIONS
-      </Text>
-      <View style={styles.group}>
-        <LowCreditAlertRow />
+    <Screen>
+      <BackBar label="Back" />
+      <View style={styles.header}>
+        <Text style={styles.title}>Settings</Text>
       </View>
-      <Text style={styles.note}>Each exam keeps its own reminder. Set it when you schedule the exam.</Text>
-
-      <View style={styles.group}>
-        <Pressable
-          onPress={() => router.push('/credits')}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.row, styles.rowDivider, IOS && pressed && IOS_DIM]}
-        >
-          <Text style={styles.rowLabel}>Credits &amp; history</Text>
-          <Text style={styles.rowValue}>{balanceUnits === null ? '–' : formatCredits(balanceUnits)}</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Pressable style={styles.profileCard} onPress={() => router.push('/settings/profile')} accessibilityRole="button" accessibilityLabel={`Your profile: ${fullName}`}>
+          <Avatar uri={resolvePhotoUri(profile.photoPath) ?? undefined} initials={buildInitials(profile.firstName, profile.lastName)} size={46} />
+          <View style={styles.profileText}>
+            <Text style={styles.profileName}>{fullName}</Text>
+            <Text style={styles.profileMeta} numberOfLines={1}>
+              {profile.email}
+            </Text>
+          </View>
+          <Icon name="chevronRight" size={19} color={color.chevron} />
         </Pressable>
-        <Pressable
-          onPress={exit.signOut}
-          disabled={exit.isSigningOut}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.row, IOS && pressed && IOS_DIM]}
-        >
-          <Text style={[styles.rowLabel, styles.danger]}>{exit.isSigningOut ? 'Signing out…' : 'Sign out'}</Text>
-        </Pressable>
-      </View>
 
-      <DeleteAccountSection exit={exit} />
-    </PaperScreen>
+        <Card style={styles.group}>
+          <SettingsRows
+            rows={[{ icon: 'credits', label: 'Credits & history', value: balanceUnits === null ? '–' : formatCredits(balanceUnits), onPress: () => router.push('/credits') }]}
+          />
+        </Card>
+
+        <Eyebrow label="SETTINGS" />
+        {alert.isLoaded && (
+          <SettingsSection
+            icon="bell"
+            title="Notifications"
+            summary={alert.isOn ? `Low credits alert below ${alert.thresholdText} credits` : 'Low credits alert off'}
+            rows={[
+              {
+                icon: 'credits',
+                label: 'Low credits alert',
+                hint: 'A notification on this phone when you run low.',
+                trailing: <Switch value={alert.isOn} onValueChange={alert.toggle} accessibilityLabel="Low credits alert" trackColor={{ true: color.primary }} />,
+              },
+              ...(alert.isOn ? [{ icon: 'edit' as const, label: 'Alert me below', value: `${alert.thresholdText} credits`, onPress: () => setThresholdDraft(alert.thresholdText) }] : []),
+              { icon: 'clock', label: 'Exam reminders', hint: 'Each exam keeps its own reminder. Set it when you schedule the exam.' },
+            ]}
+          />
+        )}
+
+        <View style={styles.logoutRule} />
+        <Pressable style={({ pressed }) => [styles.logout, pressed && { opacity: 0.7 }]} onPress={signOut} accessibilityRole="button">
+          <Text style={styles.logoutLabel}>Logout</Text>
+        </Pressable>
+        <Text style={styles.version}>Gradely Reviewer · v{INSTALLED_APP_VERSION}</Text>
+      </ScrollView>
+
+      <EditorDialog
+        visible={thresholdDraft !== null}
+        title="Low credits alert"
+        subtitle="Get a notification when your balance drops below this."
+        onCancel={() => setThresholdDraft(null)}
+        onSave={() => {
+          alert.saveThresholdText(thresholdDraft ?? '');
+          setThresholdDraft(null);
+        }}
+      >
+        <Field label="CREDITS" value={thresholdDraft ?? ''} onChangeText={setThresholdDraft} keyboardType="number-pad" mono autoFocus />
+      </EditorDialog>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionTitle: { fontFamily: font.eyebrow, fontSize: 12, letterSpacing: 1, color: color.inkMuted, marginTop: 6 },
-  group: { borderWidth: 1, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' },
-  note: { fontFamily: font.uiRegular, fontSize: 12, color: color.inkMuted },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 50, paddingHorizontal: 14 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: color.rule },
-  rowLabel: { fontFamily: font.rowTitle, fontSize: 15, color: color.ink },
-  rowValue: { fontFamily: font.mono, fontSize: 13, color: color.inkMuted },
-  danger: { color: color.rust },
+  header: { paddingHorizontal: space.gutter, paddingTop: 6, paddingBottom: 14 },
+  title: { fontFamily: font.title, fontSize: 30, letterSpacing: -0.6, color: color.ink },
+  content: { paddingHorizontal: space.gutter, paddingBottom: 32 },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    paddingHorizontal: 18,
+    marginBottom: space.section,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: color.line,
+    backgroundColor: color.surface,
+  },
+  profileText: { flex: 1, minWidth: 0 },
+  profileName: { fontFamily: font.rowTitle, fontSize: 16, color: color.ink },
+  profileMeta: { fontFamily: font.rowSubtitle, fontSize: 12, color: color.inkMuted, marginTop: 3 },
+  group: { marginBottom: space.section },
+  logoutRule: { height: 1, backgroundColor: color.line, marginHorizontal: -space.gutter, marginTop: space.section - 10, marginBottom: space.section },
+  logout: { height: 50, borderRadius: radius.card, backgroundColor: color.rustTint, alignItems: 'center', justifyContent: 'center' },
+  logoutLabel: { fontFamily: font.rowTitle, fontSize: 15, color: color.rust },
+  version: { textAlign: 'center', fontFamily: font.uiRegular, fontSize: 11.5, color: color.inkMuted, marginTop: 14 },
 });

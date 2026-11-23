@@ -57,3 +57,20 @@ describe('account error messages', () => {
     expect(describeAccountError(new RequestCancelledError())).toBeNull();
   });
 });
+
+describe('password rules', async () => {
+  const { listPasswordRules, looksLikeEmail, meetsPasswordRules } = await import('../passwordRules');
+
+  it('asks for 8 to 72 characters, and a matching confirmation when there is one', () => {
+    expect(meetsPasswordRules('short')).toBe(false);
+    expect(meetsPasswordRules('long enough')).toBe(true);
+    expect(meetsPasswordRules('x'.repeat(73))).toBe(false);
+    expect(listPasswordRules('long enough', 'long enougH').map((rule) => rule.isMet)).toEqual([true, false]);
+    expect(meetsPasswordRules('long enough', 'long enough')).toBe(true);
+  });
+
+  it('spots an obviously wrong email', () => {
+    expect(looksLikeEmail(' ana@example.com ')).toBe(true);
+    expect(looksLikeEmail('ana@example')).toBe(false);
+  });
+});

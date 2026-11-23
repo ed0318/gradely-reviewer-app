@@ -1,35 +1,92 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Icon } from '@/components/Icon';
-import { IOS, IOS_DIM } from '@/theme/press';
-import { color, font } from '@/theme/theme';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { color, font, space } from '@/theme/theme';
+import { AccountButton } from './AccountButton';
+import { CreditsButton } from './CreditsButton';
+import { LARGE_TEXT } from '@/layout/useLayout';
 
-type ScreenHeaderProps = { title: string; onBack?: () => void };
-
-/** A back button above a large slab title ("Settings."). */
-export function ScreenHeader({ title, onBack }: ScreenHeaderProps) {
+export function ScreenHeader({
+  eyebrow,
+  title,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  action?: React.ReactNode;
+}) {
+  // At large text the buttons go under the title rather than beside it: beside
+  // "New class" the title had a third of the width and broke as "Class / es".
+  const large = useWindowDimensions().fontScale > LARGE_TEXT;
+  // The eyebrow spans the whole header rather than sharing the title's column:
+  // beside two pills that column is narrow, and "2026-2027 · QUARTER 1 · 4
+  // CLASSES" broke over two lines. One line always; it shrinks a little before
+  // it would cut anything off.
+  //
+  // The teacher's picture (the way to Settings) shares the eyebrow's line, not
+  // the title's: beside "Import" and "New class" there was no room left for it.
+  //
+  // The header is a section of its own, a white band ruled off from the page
+  // below it (Ed, 2026-10-04: "like Facebook"), with a gap before the content.
   return (
-    <View style={styles.root}>
-      {onBack && (
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={4}
-          style={({ pressed }) => [styles.back, IOS && pressed && IOS_DIM]}
+    <View style={styles.wrap}>
+      <View style={styles.top}>
+        <Text style={[styles.eyebrow, { flex: 1, minWidth: 0 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+          {eyebrow}
+        </Text>
+        {/* The balance, on every tab, where gradely-app has its bell. */}
+        <CreditsButton />
+        <AccountButton />
+      </View>
+      <View style={[styles.row, large && styles.rowStacked]}>
+        {/* One line always: beside Import and New plan, "Lesson plans" broke over
+            two. It shrinks a little first, as the eyebrow does. */}
+        <Text
+          style={[styles.title, !large && { flex: 1, minWidth: 0 }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
         >
-          <Icon name="back" />
-        </Pressable>
-      )}
-      <Text style={styles.title} accessibilityRole="header">
-        {title}
-      </Text>
+          {title}
+        </Text>
+        {action}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 2, paddingBottom: 8 },
-  back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
-  title: { fontFamily: font.title, fontSize: 30, color: color.ink },
+  wrap: {
+    paddingHorizontal: space.gutter,
+    paddingTop: 8,
+    paddingBottom: 14,
+    marginBottom: 12,
+    backgroundColor: color.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: color.line,
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+    // Clear of the picture above: its touch area and the buttons' must not meet.
+    marginTop: 12,
+  },
+  rowStacked: { flexDirection: 'column', alignItems: 'flex-start', gap: 10 },
+  eyebrow: {
+    fontFamily: font.eyebrow,
+    fontSize: 10.5,
+    letterSpacing: 1.1,
+    color: color.inkMuted,
+  },
+  title: {
+    fontFamily: font.title,
+    fontSize: 30,
+    letterSpacing: -0.6,
+    color: color.ink,
+  },
 });

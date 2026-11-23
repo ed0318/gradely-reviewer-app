@@ -32,6 +32,10 @@ function assertReleaseEnvironment() {
   const api = process.env.EXPO_PUBLIC_API_URL ?? '';
   const problems = [];
 
+  if (process.env.EXPO_PUBLIC_API_MOCK === '1') {
+    problems.push('EXPO_PUBLIC_API_MOCK is on: the build would answer from the dummy server, not the real API.');
+  }
+
   if (!/^https:\/\//i.test(api)) {
     problems.push('EXPO_PUBLIC_API_URL must be the public https address of the API.');
   } else if (/localhost|127\.0\.0\.1|10\.0\.2\.2|192\.168\.|\.local\b/i.test(api)) {

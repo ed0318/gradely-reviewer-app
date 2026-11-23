@@ -1,4 +1,6 @@
 import React, { useEffect } from 'react';
+// The dummy API's storage, before anything sends a request (only when EXPO_PUBLIC_API_MOCK is on).
+import '@/api/mock/setupMockServer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -47,7 +49,8 @@ export default function RootLayout() {
 
 /**
  * Which part of the app may show: sign-in when signed out, only the hand-over
- * when another person's reviewers are on the phone, the app once it is yours.
+ * when another person's reviewers are on the phone, setup until the account
+ * has a name, then the app.
  * Protected groups mean no deep link or back gesture reaches the wrong one.
  */
 function RootNavigator() {
@@ -65,9 +68,13 @@ function RootNavigator() {
       <Stack.Protected guard={session.kind === 'handover'}>
         <Stack.Screen name="handover" />
       </Stack.Protected>
+      <Stack.Protected guard={session.kind === 'onboarding'}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
       <Stack.Protected guard={session.kind === 'signed_in'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/profile" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
     </Stack>
   );

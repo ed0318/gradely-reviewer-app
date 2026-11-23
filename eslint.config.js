@@ -12,6 +12,17 @@ module.exports = defineConfig([
     rules: { 'react/no-unescaped-entities': 'off' },
   },
   {
+    // As in gradely-app, whose components these are: rules written for the
+    // React Compiler, which neither app uses. The latest-value ref and a reset
+    // in an effect are ordinary React without it. Warnings, not errors; make
+    // them errors again before turning the compiler on.
+    rules: {
+      'react-hooks/refs': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/immutability': 'warn',
+    },
+  },
+  {
     // The house style: T[] for a plain type, Array<…> for anything longer.
     files: ['**/*.ts', '**/*.tsx'],
     rules: { '@typescript-eslint/array-type': ['warn', { default: 'array-simple' }] },

@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Button } from '@/components/Button';
-import { PaperScreen } from '@/components/PaperScreen';
-import { useAccountExit } from '@/features/account/hooks/useAccountExit';
+import { AuthScreen } from '@/components/AuthScreen';
+import { signOutOfAccount } from '@/features/account/actions';
 import { HandoverCodeStep } from '@/features/handover/components/HandoverCodeStep';
 import { HandoverConfirmStep } from '@/features/handover/components/HandoverConfirmStep';
 import { HandoverEraseStep } from '@/features/handover/components/HandoverEraseStep';
@@ -21,11 +21,16 @@ export default function HandoverScreen() {
 
 function HandoverFlow({ account, owner }: { account: Parameters<typeof useHandoverFlow>[0]; owner: Parameters<typeof useHandoverFlow>[1] }) {
   const flow = useHandoverFlow(account, owner);
-  const exit = useAccountExit();
-  const isLocked = flow.isBusy || exit.isSigningOut;
+  // Signing out leaves everything as it was; the session change brings sign-in back.
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const signOut = () => {
+    setIsSigningOut(true);
+    void signOutOfAccount().catch(() => setIsSigningOut(false));
+  };
+  const isLocked = flow.isBusy || isSigningOut;
 
   return (
-    <PaperScreen
+    <AuthScreen
       footer={
         <>
           {flow.step === 'confirm' && <Button label={`Send code to ${flow.ownerFirstName}`} onPress={flow.sendCode} isBusy={flow.isBusy} isDisabled={!flow.canSendCode} />}
@@ -39,7 +44,7 @@ function HandoverFlow({ account, owner }: { account: Parameters<typeof useHandov
               isDisabled={!flow.canErase}
             />
           )}
-          <Button label="Sign out" variant="quiet" onPress={exit.signOut} isBusy={exit.isSigningOut} isDisabled={isLocked} />
+          <Button label="Sign out" variant="quiet" onPress={signOut} isBusy={isSigningOut} isDisabled={isLocked} />
         </>
       }
     >
@@ -47,7 +52,7 @@ function HandoverFlow({ account, owner }: { account: Parameters<typeof useHandov
       {flow.step === 'confirm' && <HandoverConfirmStep flow={flow} owner={owner} />}
       {flow.step === 'code' && <HandoverCodeStep flow={flow} owner={owner} />}
       {flow.step === 'erase' && <HandoverEraseStep flow={flow} owner={owner} />}
-    </PaperScreen>
+    </AuthScreen>
   );
 }
 

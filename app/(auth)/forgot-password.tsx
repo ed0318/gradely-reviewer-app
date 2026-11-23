@@ -1,81 +1,64 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AuthScreen } from '@/components/AuthScreen';
+import { BackBar } from '@/components/BackBar';
 import { Button } from '@/components/Button';
 import { FormMessage } from '@/components/FormMessage';
 import { InfoNote } from '@/components/InfoNote';
-import { PaperScreen } from '@/components/PaperScreen';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { TextField } from '@/components/TextField';
-import { MIN_PASSWORD_LENGTH } from '@/features/account/hooks/useCreateAccount';
-import { RESET_CODE_LENGTH, usePasswordReset } from '@/features/account/hooks/usePasswordReset';
+import { AuthField } from '@/features/account/components/AuthField';
+import { useForgotPassword } from '@/features/account/hooks/usePasswordReset';
 import { color, font } from '@/theme/theme';
 
-/** Forgot password: email → emailed 6-digit code and a new password → back to sign-in. */
+/** gradely-app's "Forgot your password?": the address, then a 6-digit code on the next screen. */
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const reset = usePasswordReset();
-
-  const footer =
-    reset.step === 'email' ? (
-      <Button label="Email me a code" onPress={reset.sendCode} isBusy={reset.isBusy} isDisabled={!reset.canSendCode} />
-    ) : reset.step === 'code' ? (
-      <Button label="Set new password" onPress={reset.resetWithCode} isBusy={reset.isBusy} isDisabled={!reset.canReset} />
-    ) : (
-      <Button label="Back to sign in" onPress={router.back} />
-    );
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  // `replace`: coming back here from the code would only send a second code and void the first.
+  const forgot = useForgotPassword(emailParam, (email) => router.replace({ pathname: '/reset-password', params: { email } }));
 
   return (
-    <PaperScreen footer={footer}>
-      <ScreenHeader title={reset.step === 'done' ? 'Password changed.' : 'Reset your password.'} onBack={router.back} />
-      {reset.step === 'email' && (
+    <AuthScreen
+      header={<BackBar label="Log in" />}
+      footer={
         <>
-          <Text style={styles.body}>Enter the email you signed up with. If it has an account, we'll send a 6-digit code.</Text>
-          <TextField
-            label="Email"
-            value={reset.email}
-            onChangeText={reset.setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            textContentType="emailAddress"
-          />
+          <Button label="Send code" onPress={forgot.send} isBusy={forgot.isBusy} isDisabled={!forgot.canSend} />
+          <Button label="Back to log in" variant="quiet" onPress={() => router.replace('/sign-in')} />
         </>
-      )}
-      {reset.step === 'code' && (
-        <>
-          <Text style={styles.body}>
-            If <Text style={styles.strong}>{reset.email.trim()}</Text> has an account, a code is on its way. Enter it with your new password.
-          </Text>
-          <TextField
-            label={`${RESET_CODE_LENGTH}-digit code`}
-            value={reset.code}
-            onChangeText={reset.setCode}
-            keyboardType="number-pad"
-            autoComplete="one-time-code"
-            textContentType="oneTimeCode"
-            maxLength={RESET_CODE_LENGTH}
-            isMonospace
-          />
-          <TextField
-            label="New password"
-            value={reset.newPassword}
-            onChangeText={reset.setNewPassword}
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            errorMessage={reset.newPassword.length > 0 && reset.newPassword.length < MIN_PASSWORD_LENGTH ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : null}
-          />
-          <InfoNote icon="clock" text="A code lasts 15 minutes and works once." />
-        </>
-      )}
-      {reset.step === 'done' && <Text style={styles.body}>Sign in with your new password.</Text>}
-      <FormMessage text={reset.errorMessage} />
-    </PaperScreen>
+      }
+    >
+      <Text style={styles.title} accessibilityRole="header">
+        Forgot your password?
+      </Text>
+      <Text style={styles.subtitle}>Enter the email address on your account and we will send you a 6-digit code to choose a new password with.</Text>
+      <View style={styles.field}>
+        <AuthField
+          icon="mail"
+          label="Email address"
+          value={forgot.email}
+          onChangeText={forgot.setEmail}
+          editable={!forgot.isBusy}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          autoFocus={!emailParam}
+          returnKeyType="send"
+          onSubmitEditing={forgot.send}
+        />
+      </View>
+      <FormMessage text={forgot.errorMessage} />
+      <View style={styles.note}>
+        <InfoNote text="If that address has an account, a code is on its way. The code lasts 15 minutes and can only be used once. Check your spam folder if it has not arrived." />
+      </View>
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { fontFamily: font.uiRegular, fontSize: 14, lineHeight: 21, color: color.inkMuted },
-  strong: { fontFamily: font.rowTitle, color: color.ink },
+  title: { fontFamily: font.title, fontSize: 32, letterSpacing: -0.6, color: color.ink },
+  subtitle: { fontFamily: font.uiRegular, fontSize: 14, lineHeight: 21, color: color.inkMuted, marginTop: 10 },
+  field: { marginTop: 26, marginBottom: 12 },
+  note: { marginTop: 20 },
 });
