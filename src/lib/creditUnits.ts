@@ -35,7 +35,7 @@ const QUARTER_SUFFIXES = ['', '.25', '.5', '.75'] as const;
  */
 export function formatCredits(units: number): string {
   if (!Number.isInteger(units)) throw new RangeError(`Units are whole numbers, got ${units}.`);
-  const sign = units < 0 ? '-' : '';
+  const sign = units < 0 ? '−' : '';
   const absolute = Math.abs(units);
   const wholeCredits = Math.floor(absolute / UNITS_PER_CREDIT);
   const quarter = absolute % UNITS_PER_CREDIT;

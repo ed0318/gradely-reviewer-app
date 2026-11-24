@@ -2,7 +2,7 @@ import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { decodeBase64, encodeBase64 } from '@/lib/base64';
 import { calculateExamCostUnits } from '@/lib/creditUnits';
-import { MOCK_APP_VERSIONS, MOCK_CODE, MOCK_PRODUCTS, type MockState, type MockTransaction, type MockUser } from './mockState';
+import { MOCK_APP_VERSIONS, MOCK_CODE, MOCK_PRODUCTS, type MockState, type MockStorePurchase, type MockTransaction, type MockUser } from './mockState';
 
 /**
  * A dummy reviewer-api, answering the same paths with the same envelopes,
@@ -142,6 +142,7 @@ export function handleMockRequest(context: MockContext, request: MockRequest): M
     case 'DELETE /me':
       state.users = state.users.filter((user) => user.id !== signedIn.id);
       state.transactions = state.transactions.filter((row) => row.userId !== signedIn.id);
+      state.storePurchases = state.storePurchases.filter((purchase) => purchase.userId !== signedIn.id);
       for (const [token, userId] of Object.entries(state.tokens)) if (userId === signedIn.id) delete state.tokens[token];
       return ok(undefined, 'Your account has been deleted.');
     case 'GET /credits/transactions':
@@ -149,7 +150,7 @@ export function handleMockRequest(context: MockContext, request: MockRequest): M
     case 'POST /exams/charge':
       return chargeExam(context, signedIn, body);
     case 'POST /purchases/refresh':
-      return ok({ credited_units: 0, credited_purchase_count: 0, balance_units: signedIn.balanceUnits }, 'Purchases checked.');
+      return ok(creditStorePurchases(context, signedIn), 'Purchases checked.');
     case 'POST /device/handover/send-code': {
       const owner = state.users.find((user) => user.id === body.owner_id);
       if (!owner) return ok({ owner_gone: true, sent_to: null }, 'A code was sent to the owner.');
@@ -230,4 +231,50 @@ function chargeExam(context: MockContext, user: MockUser, body: Record<string, u
   };
   context.state.transactions.push(row);
   return ok(toCharge(row, false), 'Exam charged.', 201);
+}
+
+/**
+ * What the dummy store does when someone "buys": the store has taken the
+ * payment, and the purchase waits for /purchases/refresh (the real server asks
+ * RevenueCat). The same store transaction id twice is one purchase.
+ */
+export function recordMockStorePurchase(context: MockContext, userId: string, storeProductId: string, storeTransactionId: string): MockStorePurchase | null {
+  if (!MOCK_PRODUCTS.some((product) => product.store_product_id === storeProductId)) return null;
+  const earlier = context.state.storePurchases.find((purchase) => purchase.storeTransactionId === storeTransactionId);
+  if (earlier) return earlier;
+  const purchase: MockStorePurchase = { storeTransactionId, userId, storeProductId, purchasedAt: context.now().toISOString(), creditedTransactionId: null };
+  context.state.storePurchases.push(purchase);
+  return purchase;
+}
+
+/**
+ * Credits every store purchase the account has not been credited for, once per
+ * store transaction id, with the units from the product list and never from
+ * the client, as reviewer-api's refresh does. A second call finds nothing new.
+ */
+function creditStorePurchases(context: MockContext, user: MockUser): { credited_units: number; credited_purchase_count: number; balance_units: number } {
+  let creditedUnits = 0;
+  let creditedCount = 0;
+  for (const purchase of context.state.storePurchases) {
+    if (purchase.userId !== user.id || purchase.creditedTransactionId !== null) continue;
+    const product = MOCK_PRODUCTS.find((candidate) => candidate.store_product_id === purchase.storeProductId);
+    if (!product) continue;
+    user.balanceUnits += product.units;
+    const row: MockTransaction = {
+      id: context.state.nextTransactionId++,
+      userId: user.id,
+      type: 'purchase',
+      units: product.units,
+      balanceAfterUnits: user.balanceUnits,
+      idempotencyKey: `store:${purchase.storeTransactionId}`,
+      examName: null,
+      itemCount: null,
+      createdAt: context.now().toISOString(),
+    };
+    context.state.transactions.push(row);
+    purchase.creditedTransactionId = row.id;
+    creditedUnits += product.units;
+    creditedCount += 1;
+  }
+  return { credited_units: creditedUnits, credited_purchase_count: creditedCount, balance_units: user.balanceUnits };
 }

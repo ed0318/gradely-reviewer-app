@@ -72,6 +72,10 @@ export function buildAttempt(overrides: Partial<ExamAttempt> = {}): ExamAttempt 
     score: null,
     totalPoints: null,
     status: 'ready',
+    sourceAttemptId: null,
+    onlyMissed: false,
+    currentPosition: 0,
+    elapsedSeconds: 0,
     ...overrides,
   };
 }

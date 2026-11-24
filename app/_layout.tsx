@@ -75,6 +75,13 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings/profile" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="topic/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="question/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="credits/history" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="exam/new" options={{ animation: 'slide_from_right' }} />
+        {/* No swipe-back mid-exam: Quit asks first. */}
+        <Stack.Screen name="exam/[id]/take" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="exam/[id]/results" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
     </Stack>
   );

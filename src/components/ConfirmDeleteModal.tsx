@@ -16,6 +16,8 @@ type Props = {
   visible: boolean;
   title: string;
   cascadeItems: CascadeItem[];
+  /** What the delete leaves alone, shown under its own heading in green. Optional. */
+  keepItems?: CascadeItem[];
   /** Wording on the confirm button. */
   confirmLabel?: string;
   /** The word the teacher types to unlock the button. `null` asks for no typing. */
@@ -42,6 +44,7 @@ export function ConfirmDeleteModal({
   visible,
   title,
   cascadeItems,
+  keepItems = [],
   confirmLabel = 'Delete',
   confirmWord = 'DELETE',
   cascadeHeading = 'WHAT GOES WITH IT',
@@ -65,9 +68,12 @@ export function ConfirmDeleteModal({
       : confirmLabel;
 
   // The modal stays mounted between uses, so clear the typed word each time it opens.
-  useEffect(() => {
+  // Adjusted while rendering (React's way to reset state on a prop change), not in an effect.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) setText('');
-  }, [visible]);
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -75,7 +81,7 @@ export function ConfirmDeleteModal({
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <Pressable onPress={onCancel} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+            <Pressable onPress={onCancel} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
               <Icon name="close" size={22} color={color.inkMuted} />
             </Pressable>
           </View>
@@ -85,6 +91,21 @@ export function ConfirmDeleteModal({
               <Text style={styles.label}>{cascadeHeading}</Text>
               <View style={styles.cascadeBox}>
                 {cascadeItems.map((item, i) => (
+                  <React.Fragment key={item.label}>
+                    {i > 0 && <View style={styles.cascadeDivider} />}
+                    <Text style={styles.cascadeLabel}>{item.label}</Text>
+                    <Text style={styles.cascadeDetail}>{item.detail}</Text>
+                  </React.Fragment>
+                ))}
+              </View>
+            </>
+          )}
+
+          {keepItems.length > 0 && (
+            <>
+              <Text style={[styles.label, { marginTop: 14 }]}>WHAT STAYS</Text>
+              <View style={styles.keepBox}>
+                {keepItems.map((item, i) => (
                   <React.Fragment key={item.label}>
                     {i > 0 && <View style={styles.cascadeDivider} />}
                     <Text style={styles.cascadeLabel}>{item.label}</Text>
@@ -188,6 +209,7 @@ export function afterModalDismiss(fn: () => void): () => void {
 export type PendingDelete = {
   title: string;
   cascadeItems: CascadeItem[];
+  keepItems?: CascadeItem[];
   confirmLabel?: string;
   confirmWord?: string | null;
   cascadeHeading?: string;
@@ -249,6 +271,8 @@ export function useConfirmDelete() {
 
   const [phase, setPhase] = useState<BackupPhase>(null);
   const saving = useRef<AbortController | null>(null);
+  // Leaving the screen mid-backup stops the backup and its progress callbacks.
+  useEffect(() => () => saving.current?.abort(), []);
   const close = () => {
     saving.current?.abort();
     saving.current = null;
@@ -286,6 +310,7 @@ export function useConfirmDelete() {
       visible={pending != null}
       title={view?.title ?? ''}
       cascadeItems={view?.cascadeItems ?? []}
+      keepItems={view?.keepItems}
       confirmLabel={view?.confirmLabel}
       confirmWord={view ? view.confirmWord : undefined}
       cascadeHeading={view?.cascadeHeading}
@@ -348,6 +373,8 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontFamily: font.sheetTitle, fontSize: 25, letterSpacing: -0.5, color: color.ink },
   label: { fontFamily: font.eyebrow, fontSize: 10.5, letterSpacing: 1.1, color: color.inkMuted, marginTop: 18, marginBottom: 10 },
   cascadeBox: { backgroundColor: color.paper, borderRadius: radius.card, padding: 14, paddingHorizontal: 16 },
+  // The same box with a green edge: what is kept reads apart from what goes, by more than colour (its own heading).
+  keepBox: { backgroundColor: color.paper, borderRadius: radius.card, padding: 14, paddingHorizontal: 16, borderLeftWidth: 3, borderLeftColor: color.ok },
   cascadeLabel: { fontFamily: font.rowTitle, fontSize: 13.5, color: color.ink },
   cascadeDetail: { fontFamily: font.uiRegular, fontSize: 12, color: color.inkMuted, marginTop: 3, lineHeight: 17 },
   cascadeDivider: { height: 1, backgroundColor: color.rule, marginVertical: 12 },

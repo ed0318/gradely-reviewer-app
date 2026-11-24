@@ -85,6 +85,7 @@ export function Field({
   keyboardType,
   autoCapitalize,
   autoFocus,
+  multiline,
   style,
 }: {
   label: string;
@@ -95,6 +96,8 @@ export function Field({
   keyboardType?: 'default' | 'number-pad' | 'email-address';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoFocus?: boolean;
+  /** Several lines, for a longer text such as directions. */
+  multiline?: boolean;
   style?: object;
 }) {
   return (
@@ -105,7 +108,8 @@ export function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={color.inkMuted}
-        style={[styles.input, mono && styles.mono]}
+        multiline={multiline}
+        style={[styles.input, mono && styles.mono, multiline && styles.multiline]}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoFocus={autoFocus}
@@ -132,6 +136,7 @@ const styles = StyleSheet.create({
     color: color.ink,
   },
   mono: { fontFamily: font.mono, fontSize: 14.5 },
+  multiline: { height: undefined, minHeight: 84, paddingTop: 14, paddingBottom: 14, lineHeight: 21, textAlignVertical: 'top' },
   error: { fontFamily: font.uiRegular, fontSize: 12.5, lineHeight: 18, color: color.rust, marginTop: 12 },
   save: { height: 52, borderRadius: radius.field, backgroundColor: color.primary, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   saveLabel: { fontFamily: font.eyebrow, fontSize: 15, color: color.onPrimary },

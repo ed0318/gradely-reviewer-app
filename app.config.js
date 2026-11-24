@@ -27,7 +27,16 @@ module.exports = ({ config }) => {
 };
 
 function assertReleaseEnvironment() {
-  if (process.env.EAS_BUILD_PROFILE !== 'production' && process.env.REVIEWER_RELEASE !== '1') return;
+  const profile = process.env.EAS_BUILD_PROFILE ?? '';
+  const isRelease = profile === 'production' || process.env.REVIEWER_RELEASE === '1';
+
+  // Only a development build may carry the dummy API; a preview build goes to testers.
+  if (!isRelease) {
+    if (profile === 'preview' && process.env.EXPO_PUBLIC_API_MOCK === '1') {
+      throw new Error('Refusing to make a preview build: EXPO_PUBLIC_API_MOCK is on. Testers need the real API.');
+    }
+    return;
+  }
 
   const api = process.env.EXPO_PUBLIC_API_URL ?? '';
   const problems = [];

@@ -24,6 +24,8 @@ vi.mock('@/db/client', () => ({
   queueWrite: async <T,>(work: (writer: TestDatabase) => Promise<T>) => work(database),
 }));
 
+vi.mock('@/notifications/examReminders', () => ({ cancelAllExamReminders: async () => undefined }));
+
 const fetchMe = vi.fn<() => Promise<AccountUser>>();
 vi.mock('@/api/auth', () => ({ fetchMe: () => fetchMe() }));
 

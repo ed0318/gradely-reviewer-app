@@ -65,7 +65,7 @@ describe('the schema', () => {
 
   it('seeds the one settings row', async () => {
     const database = await openMigratedMemoryDatabase();
-    expect(await database.getAllAsync('SELECT id, low_credit_threshold_units FROM settings')).toEqual([{ id: 1, low_credit_threshold_units: 40 }]);
+    expect(await database.getAllAsync('SELECT id, low_credit_threshold_units FROM settings')).toEqual([{ id: 1, low_credit_threshold_units: 80 }]);
   });
 
   it('runs again without changing anything', async () => {

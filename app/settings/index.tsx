@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { BackBar } from '@/components/BackBar';
 import { Card } from '@/components/Card';
-import { EditorDialog, Field } from '@/components/EditorDialog';
 import { Eyebrow } from '@/components/Eyebrow';
 import { Icon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
+import { DevOfflineSwitch } from '@/features/account/components/settings/DevOfflineSwitch';
 import { SettingsRows } from '@/features/account/components/settings/SettingsRows';
 import { SettingsSection } from '@/features/account/components/settings/SettingsSection';
 import { useSignOut } from '@/features/account/hooks/useSignOut';
 import { INSTALLED_APP_VERSION } from '@/features/account/hooks/useRequiredUpdate';
 import { resolvePhotoUri } from '@/features/account/profilePhoto';
+import { LowCreditThresholdField } from '@/features/credits/components/LowCreditThresholdField';
 import { useLowCreditAlert } from '@/features/credits/hooks/useLowCreditAlert';
 import { formatCredits } from '@/lib/creditUnits';
 import { buildFullName, buildInitials } from '@/lib/personName';
@@ -27,7 +28,6 @@ export default function SettingsScreen() {
   const { balanceUnits } = useCredits();
   const alert = useLowCreditAlert();
   const signOut = useSignOut();
-  const [thresholdDraft, setThresholdDraft] = useState<string | null>(null);
   const fullName = buildFullName(profile.firstName, profile.lastName);
 
   return (
@@ -36,7 +36,7 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Pressable style={styles.profileCard} onPress={() => router.push('/settings/profile')} accessibilityRole="button" accessibilityLabel={`Your profile: ${fullName}`}>
           <Avatar uri={resolvePhotoUri(profile.photoPath) ?? undefined} initials={buildInitials(profile.firstName, profile.lastName)} size={46} />
           <View style={styles.profileText}>
@@ -50,7 +50,7 @@ export default function SettingsScreen() {
 
         <Card style={styles.group}>
           <SettingsRows
-            rows={[{ icon: 'credits', label: 'Credits & history', value: balanceUnits === null ? '–' : formatCredits(balanceUnits), onPress: () => router.push('/credits') }]}
+            rows={[{ icon: 'credits', label: 'Credits & history', value: balanceUnits === null ? '–' : formatCredits(balanceUnits), onPress: () => router.push('/credits/history') }]}
           />
         </Card>
 
@@ -67,11 +67,21 @@ export default function SettingsScreen() {
                 hint: 'A notification on this phone when you run low.',
                 trailing: <Switch value={alert.isOn} onValueChange={alert.toggle} accessibilityLabel="Low credits alert" trackColor={{ true: color.primary }} />,
               },
-              ...(alert.isOn ? [{ icon: 'edit' as const, label: 'Alert me below', value: `${alert.thresholdText} credits`, onPress: () => setThresholdDraft(alert.thresholdText) }] : []),
+              ...(alert.isOn
+                ? [
+                    {
+                      icon: 'edit' as const,
+                      label: 'Alert me below',
+                      trailing: <LowCreditThresholdField value={alert.thresholdText} onChangeText={alert.setThresholdText} onCommit={alert.saveThresholdText} />,
+                    },
+                  ]
+                : []),
               { icon: 'clock', label: 'Exam reminders', hint: 'Each exam keeps its own reminder. Set it when you schedule the exam.' },
             ]}
           />
         )}
+
+        <DevOfflineSwitch />
 
         <View style={styles.logoutRule} />
         <Pressable style={({ pressed }) => [styles.logout, pressed && { opacity: 0.7 }]} onPress={signOut} accessibilityRole="button">
@@ -80,18 +90,6 @@ export default function SettingsScreen() {
         <Text style={styles.version}>Gradely Reviewer · v{INSTALLED_APP_VERSION}</Text>
       </ScrollView>
 
-      <EditorDialog
-        visible={thresholdDraft !== null}
-        title="Low credits alert"
-        subtitle="Get a notification when your balance drops below this."
-        onCancel={() => setThresholdDraft(null)}
-        onSave={() => {
-          alert.saveThresholdText(thresholdDraft ?? '');
-          setThresholdDraft(null);
-        }}
-      >
-        <Field label="CREDITS" value={thresholdDraft ?? ''} onChangeText={setThresholdDraft} keyboardType="number-pad" mono autoFocus />
-      </EditorDialog>
     </Screen>
   );
 }

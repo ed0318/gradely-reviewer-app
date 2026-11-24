@@ -114,3 +114,8 @@ export async function saveSectionDirection(
     direction.text,
   );
 }
+
+/** Marks the topic as just edited, so the Topics list puts it first. Called by every question write. */
+export async function touchTopic(database: SQLiteDatabase, topicId: string, now: number): Promise<void> {
+  await database.runAsync('UPDATE topics SET updated_at = ? WHERE id = ?', now, topicId);
+}

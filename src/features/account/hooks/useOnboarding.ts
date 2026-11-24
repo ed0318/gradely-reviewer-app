@@ -10,7 +10,7 @@ import { deletePhotoFile, pickProfilePhoto, PhotoPermissionError, resolvePhotoUr
 
 /** Who · Alerts · First topic, as gradely-app's Who · Level · Year · Backup · First class. */
 export const ONBOARDING_STEP_COUNT = 3;
-export const DEFAULT_ALERT_CREDITS = '10';
+export const DEFAULT_ALERT_CREDITS = '20';
 
 export function useOnboarding() {
   const { account } = useSignedInSession();

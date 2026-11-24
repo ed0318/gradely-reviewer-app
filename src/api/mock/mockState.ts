@@ -27,9 +27,23 @@ export type MockTransaction = {
   createdAt: string;
 };
 
+/** A purchase the dummy store made, waiting for /purchases/refresh to credit it (once). */
+export type MockStorePurchase = {
+  /** The fake store's own transaction id: what the server credits once per. */
+  storeTransactionId: string;
+  userId: string;
+  storeProductId: string;
+  purchasedAt: string;
+  /** The ledger row that credited it; null until /purchases/refresh has run. */
+  creditedTransactionId: number | null;
+};
+
 export type MockState = {
+  /** Which seed this data was made from; `upgradeMockState` brings older saved data up to date. */
+  version: number;
   users: MockUser[];
   transactions: MockTransaction[];
+  storePurchases: MockStorePurchase[];
   /** token → user id. */
   tokens: Record<string, string>;
   nextTransactionId: number;
@@ -50,41 +64,76 @@ export const MOCK_APP_VERSIONS = [
   { platform: 'android', min_supported_version: '1.0', latest_version: '1.0' },
 ];
 
-/** Ana from the mockup: 150 credits bought, three exams taken, 142 left (568 units). */
+/** Bump when the seed changes, and teach `upgradeMockState` the step. */
+export const MOCK_STATE_VERSION = 2;
+
+type SeedRow = { at: string; type: 'purchase' | 'exam_charge'; units: number; examName?: string };
+const charge = (at: string, examName: string, itemCount: number): SeedRow => ({ at, type: 'exam_charge', units: -itemCount, examName });
+const purchase = (at: string, credits: number): SeedRow => ({ at, type: 'purchase', units: credits * 4 });
+
+/**
+ * Ana's ledger, oldest first: two 150-credit packs and nineteen exams named like
+ * the dummy exams on the phone (src/db/dev), 21 rows so history has three pages.
+ * It adds up to 568 units, the mockup's 142 credits.
+ */
+const ANA_SEED_LEDGER: SeedRow[] = [
+  purchase('2026-10-25T10:00:00+08:00', 150),
+  charge('2026-10-26T19:10:00+08:00', 'Civil Service — Numerical drill', 30),
+  charge('2026-10-27T20:05:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-10-28T19:30:00+08:00', 'LET Gen Ed — English', 60),
+  charge('2026-10-30T20:30:00+08:00', 'Civil Service — Numerical drill', 30),
+  charge('2026-11-02T21:15:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-11-04T18:00:00+08:00', 'LET Gen Ed — English', 60),
+  charge('2026-11-06T19:20:00+08:00', 'Civil Service — Numerical drill', 30),
+  purchase('2026-11-08T16:45:00+08:00', 150),
+  charge('2026-11-10T20:05:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-11-12T19:30:00+08:00', 'Civil Service — Numerical drill', 40),
+  charge('2026-11-14T21:40:00+08:00', 'Civil Service — Numerical drill', 30),
+  charge('2026-11-15T18:11:00+08:00', 'LET Gen Ed — English', 50),
+  charge('2026-11-17T19:05:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-11-19T17:32:00+08:00', 'Civil Service — Numerical drill', 30),
+  charge('2026-11-20T19:02:00+08:00', 'LET Gen Ed — English', 60),
+  charge('2026-11-21T08:30:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-11-21T21:10:00+08:00', 'Civil Service — Numerical drill', 32),
+  charge('2026-11-22T20:30:00+08:00', 'Civil Service — Numerical drill', 30),
+  charge('2026-11-23T18:22:00+08:00', 'Pharmacology quick check', 20),
+  charge('2026-11-23T20:06:00+08:00', 'Numerical drill #5', 30),
+];
+
+export const ANA_ID = '0b0f5d6e-1111-4222-8333-944455556666';
+
+/** Ana's seed ledger as rows with ids from `firstId`, balances running from 0. */
+export function buildAnaSeedTransactions(firstId: number): MockTransaction[] {
+  let balance = 0;
+  return ANA_SEED_LEDGER.map((row, index) => {
+    balance += row.units;
+    return {
+      id: firstId + index,
+      userId: ANA_ID,
+      type: row.type,
+      units: row.units,
+      balanceAfterUnits: balance,
+      idempotencyKey: row.type === 'exam_charge' ? `seed-${index + 1}` : null,
+      examName: row.examName ?? null,
+      itemCount: row.type === 'exam_charge' ? -row.units : null,
+      createdAt: row.at,
+    };
+  });
+}
+
+/** Ana from the mockup: 300 credits bought, nineteen exams taken, 142 left (568 units). */
 export function createSeedState(): MockState {
+  const transactions = buildAnaSeedTransactions(1);
   const ana: MockUser = {
-    id: '0b0f5d6e-1111-4222-8333-944455556666',
+    id: ANA_ID,
     email: 'ana@example.com',
     password: 'reviewer123',
     firstName: 'Ana',
     lastName: 'Reyes',
-    balanceUnits: 568,
+    balanceUnits: transactions[transactions.length - 1].balanceAfterUnits,
     backupKey: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=',
     hasGoogle: false,
     hasApple: false,
   };
-  const seed: Array<Omit<MockTransaction, 'id' | 'userId' | 'balanceAfterUnits'>> = [
-    { type: 'purchase', units: 600, idempotencyKey: null, examName: null, itemCount: null, createdAt: '2026-11-20T09:00:00+08:00' },
-    { type: 'exam_charge', units: -20, idempotencyKey: 'seed-1', examName: 'Pharmacology quick check', itemCount: 20, createdAt: '2026-11-21T19:10:00+08:00' },
-    { type: 'exam_charge', units: -60, idempotencyKey: 'seed-2', examName: 'LET Gen Ed — English', itemCount: 60, createdAt: '2026-11-22T20:30:00+08:00' },
-    { type: 'exam_charge', units: -30, idempotencyKey: 'seed-3', examName: 'Civil Service — Numerical drill', itemCount: 30, createdAt: '2026-11-23T18:45:00+08:00' },
-  ];
-  let balance = 0;
-  const transactions = seed.map((row, index) => {
-    balance += row.units;
-    return { ...row, id: index + 1, userId: ana.id, balanceAfterUnits: balance };
-  });
-  // 600 - 110 = 490 from the ledger; a +78 adjustment brings it to the mockup's 142 credits.
-  transactions.push({
-    id: transactions.length + 1,
-    userId: ana.id,
-    type: 'adjustment',
-    units: 78,
-    balanceAfterUnits: balance + 78,
-    idempotencyKey: null,
-    examName: null,
-    itemCount: null,
-    createdAt: '2026-11-23T21:00:00+08:00',
-  });
-  return { users: [ana], transactions, tokens: {}, nextTransactionId: transactions.length + 1, nextTokenNumber: 1 };
+  return { version: MOCK_STATE_VERSION, users: [ana], transactions, storePurchases: [], tokens: {}, nextTransactionId: transactions.length + 1, nextTokenNumber: 1 };
 }

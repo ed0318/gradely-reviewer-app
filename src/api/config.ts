@@ -9,9 +9,10 @@ const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
  * EXPO_PUBLIC_API_MOCK=1 answers every request from the dummy server in
  * src/api/mock instead of the network: same paths, envelopes and error codes as
  * reviewer-api, so nothing above src/api changes when it is turned off.
- * Development only; a release build refuses it (app.config.js).
+ * Development only: it needs `__DEV__`, so a release bundle never answers from the dummy
+ * server even if the variable leaks in, and app.config.js refuses it for store and preview builds too.
  */
-export const isApiMocked = process.env.EXPO_PUBLIC_API_MOCK === '1';
+export const isApiMocked = typeof __DEV__ !== 'undefined' && __DEV__ && process.env.EXPO_PUBLIC_API_MOCK === '1';
 
 export const isApiConfigured = isApiMocked || !!configuredUrl;
 

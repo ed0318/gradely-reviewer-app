@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { openDatabase, queueWrite } from '@/db/client';
 import { getSettings, saveLowCreditAlertSettings } from '@/db/repositories/account';
 import { UNITS_PER_CREDIT } from '@/lib/creditUnits';
+import { readNotificationPermission, requestNotificationPermission } from '@/notifications/notificationPermission';
 
 /**
  * The low-credit alert's switch and threshold. The threshold is typed in whole
- * credits and stored as units. Sending the alert itself comes with Phase 8.
+ * credits and stored as units. The alert itself rings after a charge (`../actions.ts`).
  */
 export function useLowCreditAlert() {
   const [isOn, setIsOn] = useState(true);
@@ -43,6 +44,12 @@ export function useLowCreditAlert() {
     toggle: (nextIsOn: boolean) => {
       setIsOn(nextIsOn);
       persist(nextIsOn, thresholdText);
+      // The alert is a notification, so the phone's own prompt comes now, as it is turned on.
+      if (nextIsOn) {
+        void readNotificationPermission()
+          .then((permission) => (permission.canAsk ? requestNotificationPermission() : undefined))
+          .catch((error: unknown) => console.warn('[reviewer] notification permission not asked', error));
+      }
     },
     setThresholdText: (value: string) => setThresholdText(value.replace(/\D/g, '').slice(0, 4)),
     saveThreshold: () => persist(isOn, thresholdText),

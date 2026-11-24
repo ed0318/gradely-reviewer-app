@@ -1,5 +1,7 @@
 import { createSeedState, type MockState } from './mockState';
+import { upgradeMockState } from './upgradeMockState';
 import { handleMockRequest, type MockContext } from './mockServer';
+import { isMockNetworkOffline } from './mockNetwork';
 
 /** Where the dummy server keeps its data between launches. Injected so tests keep it in memory. */
 export type MockStore = { load: () => MockState | null; save: (state: MockState) => void };
@@ -28,8 +30,22 @@ export function resetMockServer(): void {
 
 function getContext(): { context: MockContext; store: MockStore } {
   if (!setup) throw new Error('The mock API is on but not set up: import src/api/mock/setupMockServer first.');
-  if (!context) context = { state: setup.store.load() ?? createSeedState(), createId: setup.createId, now: () => new Date() };
+  if (!context) {
+    const saved = setup.store.load();
+    context = { state: saved ? upgradeMockState(saved) : createSeedState(), createId: setup.createId, now: () => new Date() };
+  }
   return { context, store: setup.store };
+}
+
+/**
+ * Lets dev-only code that stands in for something outside the API (the dummy
+ * store) change the dummy server's data, and saves it like any request.
+ */
+export function runOnMockServer<T>(work: (context: MockContext) => T): T {
+  const { context: serverContext, store } = getContext();
+  const result = work(serverContext);
+  store.save(serverContext.state);
+  return result;
 }
 
 /** A fetch that answers from the dummy server, with real `Response` objects. */
@@ -41,6 +57,9 @@ export async function fetchFromMock(path: string, init: RequestInit): Promise<Re
       reject(new DOMException('Aborted', 'AbortError'));
     });
   });
+
+  // The dev-only offline switch: the same failure a dropped connection gives, which the client reports as OfflineError.
+  if (isMockNetworkOffline()) throw new TypeError('Network request failed (dev offline switch is on)');
 
   const [pathname, queryString = ''] = path.split('?');
   const headers = (init.headers ?? {}) as Record<string, string>;

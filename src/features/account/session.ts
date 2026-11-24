@@ -1,3 +1,4 @@
+import { cancelAllExamReminders } from '@/notifications/examReminders';
 import { fetchMe, type AccountUser } from '@/api/auth';
 import { readToken } from '@/api/tokens';
 import { openDatabase, queueWrite } from '@/db/client';
@@ -95,6 +96,8 @@ export async function completeHandover(account: AccountSnapshot): Promise<Sessio
 }
 
 export async function eraseLocalDataAndPhotos(): Promise<void> {
+  // Their exam reminders must not ring for the next person.
+  await cancelAllExamReminders();
   await queueWrite(eraseAllLocalData);
   deleteAllPhotoFiles();
 }

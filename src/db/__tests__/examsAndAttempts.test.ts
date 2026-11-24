@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  findNextScheduledAttempt,
+  findUpNextAttempt,
   finishAttempt,
   findNextAttemptNumber,
   getAttempt,
@@ -12,6 +12,7 @@ import {
   listScheduledAttempts,
   saveAttemptAnswer,
   saveAttemptNotificationId,
+  saveAttemptScore,
   startAttempt,
 } from '../repositories/attempts';
 import { deleteExam, getExam, insertExamWithFirstAttempt, listExamsByTopic, listExamsPage } from '../repositories/exams';
@@ -73,7 +74,7 @@ describe('exams', () => {
 
   it('deletes an exam with its attempts, questions and answers', async () => {
     const database = await openWithExam();
-    await saveAttemptAnswer(database, { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true });
+    await saveAttemptAnswer(database, { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true, isFlagged: false });
     expect(await deleteExam(database, 'exam-1')).toBe(true);
     for (const table of ['exam_attempts', 'attempt_questions', 'attempt_answers']) {
       expect(await countRows(database, table), table).toBe(0);
@@ -100,23 +101,24 @@ describe('attempts', () => {
     expect(await startAttempt(database, 'attempt-1', 3_000)).toBe(true);
     expect(await startAttempt(database, 'attempt-1', 3_500)).toBe(false);
 
-    await saveAttemptAnswer(database, { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '1', isCorrect: false });
-    await saveAttemptAnswer(database, { id: 'answer-1b', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true });
-    await saveAttemptAnswer(database, { id: 'answer-2', attemptQuestionId: 'attempt-1-q2', givenAnswer: null, isCorrect: null });
+    await saveAttemptAnswer(database, { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '1', isCorrect: false, isFlagged: false });
+    await saveAttemptAnswer(database, { id: 'answer-1b', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true, isFlagged: false });
+    await saveAttemptAnswer(database, { id: 'answer-2', attemptQuestionId: 'attempt-1-q2', givenAnswer: null, isCorrect: null, isFlagged: false });
     expect(await listAttemptAnswers(database, 'attempt-1')).toEqual([
-      { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true },
-      { id: 'answer-2', attemptQuestionId: 'attempt-1-q2', givenAnswer: null, isCorrect: null },
+      { id: 'answer-1', attemptQuestionId: 'attempt-1-q1', givenAnswer: '0', isCorrect: true, isFlagged: false },
+      { id: 'answer-2', attemptQuestionId: 'attempt-1-q2', givenAnswer: null, isCorrect: null, isFlagged: false },
     ]);
 
-    expect(await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000 })).toBe(true);
-    // A self-marked essay later updates the score but keeps the finish time.
-    expect(await finishAttempt(database, 'attempt-1', { score: 2, totalPoints: 2, finishedAt: 9_000 })).toBe(true);
-    expect(await getAttempt(database, 'attempt-1')).toMatchObject({ status: 'finished', score: 2, totalPoints: 2, startedAt: 3_000, finishedAt: 4_000 });
+    expect(await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000, elapsedSeconds: 61 })).toBe(true);
+    // Finishing is once; a self-marked essay later updates the score but keeps the finish time.
+    expect(await finishAttempt(database, 'attempt-1', { score: 2, totalPoints: 2, finishedAt: 9_000, elapsedSeconds: 99 })).toBe(false);
+    expect(await saveAttemptScore(database, 'attempt-1', { score: 2, totalPoints: 2 })).toBe(true);
+    expect(await getAttempt(database, 'attempt-1')).toMatchObject({ status: 'finished', score: 2, totalPoints: 2, startedAt: 3_000, finishedAt: 4_000, elapsedSeconds: 61 });
   });
 
   it('does not finish an attempt that never started', async () => {
     const database = await openWithExam();
-    expect(await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000 })).toBe(false);
+    expect(await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000, elapsedSeconds: 5 })).toBe(false);
   });
 
   it('lists scheduled attempts soonest first and keeps their reminder ids', async () => {
@@ -135,20 +137,24 @@ describe('attempts', () => {
   it('lists finished attempts newest first with the exam name', async () => {
     const database = await openWithExam();
     await startAttempt(database, 'attempt-1', 3_000);
-    await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000 });
+    await finishAttempt(database, 'attempt-1', { score: 1, totalPoints: 2, finishedAt: 4_000, elapsedSeconds: 1 });
     await insertAttemptWithQuestions(database, buildAttempt({ id: 'attempt-2', attemptNumber: 2, chargeId: 'charge-2' }), []);
     await startAttempt(database, 'attempt-2', 5_000);
-    await finishAttempt(database, 'attempt-2', { score: 2, totalPoints: 2, finishedAt: 6_000 });
+    await finishAttempt(database, 'attempt-2', { score: 2, totalPoints: 2, finishedAt: 6_000, elapsedSeconds: 1 });
 
     const finished = await listFinishedAttemptsPage(database, { limit: 1, offset: 0 });
     expect(finished).toHaveLength(1);
     expect(finished[0]).toMatchObject({ id: 'attempt-2', examName: 'Cell biology quiz', topicId: 'topic-1', score: 2 });
   });
 
-  it('finds the next scheduled attempt with its exam name for Home', async () => {
+  it('offers Home the attempt in progress, then a ready one, then the soonest scheduled', async () => {
     const database = await openWithExam();
-    expect(await findNextScheduledAttempt(database)).toBeNull();
-    await insertAttemptWithQuestions(database, buildAttempt({ id: 'soon', attemptNumber: 2, chargeId: 'c2', status: 'scheduled', scheduledAt: 5_000 }), []);
-    expect(await findNextScheduledAttempt(database)).toEqual({ attemptId: 'soon', examId: 'exam-1', examName: 'Cell biology quiz', itemCount: 2, scheduledAt: 5_000 });
+    // attempt-1 is ready and has two copied questions.
+    expect(await findUpNextAttempt(database)).toEqual({ attemptId: 'attempt-1', examId: 'exam-1', examName: 'Cell biology quiz', itemCount: 2, scheduledAt: null, status: 'ready' });
+
+    await insertAttemptWithQuestions(database, buildAttempt({ id: 'soon', attemptNumber: 2, chargeId: 'c2', status: 'scheduled', scheduledAt: 5_000 }), buildAttemptQuestions('soon'));
+    expect((await findUpNextAttempt(database))?.attemptId).toBe('attempt-1');
+    await startAttempt(database, 'soon', 6_000);
+    expect(await findUpNextAttempt(database)).toMatchObject({ attemptId: 'soon', status: 'in_progress' });
   });
 });

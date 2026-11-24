@@ -22,6 +22,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.stubEnv('EXPO_PUBLIC_API_MOCK', '1');
   vi.stubEnv('EXPO_PUBLIC_API_URL', '');
+  vi.stubGlobal('__DEV__', true);
   vi.useFakeTimers({ shouldAdvanceTime: true, advanceTimeDelta: 400 });
   secureStore.clear();
   savedState = null;
@@ -34,6 +35,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe('dummy API', () => {
@@ -46,10 +48,10 @@ describe('dummy API', () => {
     expect((await fetchMe()).email).toBe('ana@example.com');
 
     const history = await listCreditTransactions({ page: 1, perPage: 2 });
-    expect(history.transactions.map((row) => row.type)).toEqual(['adjustment', 'exam_charge']);
-    expect(history.pagination).toMatchObject({ total: 5, lastPage: 3 });
+    expect(history.transactions.map((row) => row.examName)).toEqual(['Numerical drill #5', 'Pharmacology quick check']);
+    expect(history.pagination).toMatchObject({ total: 21, lastPage: 11 });
     const searched = await listCreditTransactions({ page: 1, search: 'english' });
-    expect(searched.transactions.map((row) => row.examName)).toEqual(['LET Gen Ed — English']);
+    expect(searched.transactions.map((row) => row.examName)).toEqual(Array(4).fill('LET Gen Ed — English'));
   });
 
   it('refuses a wrong password with the real error code', async () => {

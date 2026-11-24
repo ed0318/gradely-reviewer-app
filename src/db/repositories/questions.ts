@@ -1,6 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { PageRequest, QuestionChoice, QuestionType, TopicQuestion } from '../records';
+import { findSectionEndOrder, makeRoomAt } from './questionOrder';
 import { buildPlaceholders, toSqlBoolean } from './sqlPlaceholders';
+import { touchTopic } from './topics';
 
 /**
  * A topic's questions and their keys, stored as gradely-app stores an exam's:
@@ -9,7 +11,7 @@ import { buildPlaceholders, toSqlBoolean } from './sqlPlaceholders';
  * their own row. Every write touches the topic's `updated_at`.
  */
 
-type QuestionRow = { id: string; topic_id: string; question: string; answer: string | null; type: QuestionType; point: number; sorting_order: number };
+export type QuestionRow = { id: string; topic_id: string; question: string; answer: string | null; type: QuestionType; point: number; sorting_order: number };
 type ChoiceRow = { id: string; topic_question_id: string; choice_text: string; is_correct: number };
 type TrueFalseRow = { topic_question_id: string; answer_is_true: number };
 type EssayRow = { topic_question_id: string; answer_guide: string | null; no_lines: number };
@@ -60,27 +62,65 @@ async function deleteAnswerRows(database: SQLiteDatabase, questionId: string): P
   await database.runAsync('DELETE FROM topic_question_answer_essay WHERE topic_question_id = ?', questionId);
 }
 
-async function touchTopic(database: SQLiteDatabase, topicId: string, now: number): Promise<void> {
-  await database.runAsync('UPDATE topics SET updated_at = ? WHERE id = ?', now, topicId);
-}
-
 const identificationAnswer = (question: TopicQuestion) => (question.type === 'identification' ? question.answer : null);
 
-/** Adds a question with its key. Also restores a deleted one for Undo, with the same ids and place. */
+/** The writes behind an insert, for a caller that already holds the transaction. */
+async function insertQuestionRows(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<void> {
+  await database.runAsync(
+    'INSERT INTO topic_questions (id, topic_id, question, answer, type, point, sorting_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    question.id,
+    question.topicId,
+    question.question,
+    identificationAnswer(question),
+    question.type,
+    question.point,
+    question.sortingOrder,
+  );
+  await insertAnswerRows(database, question);
+  await touchTopic(database, question.topicId, now);
+}
+
+/** The writes behind an update, for a caller that already holds the transaction. */
+async function updateQuestionRows(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<boolean> {
+  const result = await database.runAsync(
+    'UPDATE topic_questions SET question = ?, answer = ?, type = ?, point = ?, sorting_order = ? WHERE id = ? AND topic_id = ?',
+    question.question,
+    identificationAnswer(question),
+    question.type,
+    question.point,
+    question.sortingOrder,
+    question.id,
+    question.topicId,
+  );
+  if (result.changes === 0) return false;
+  await deleteAnswerRows(database, question.id);
+  await insertAnswerRows(database, question);
+  await touchTopic(database, question.topicId, now);
+  return true;
+}
+
+/** Adds a question at the `sortingOrder` it carries. Seeding and tests; the app adds with `insertQuestionInSection`. */
 export async function insertQuestion(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<void> {
+  await database.withTransactionAsync(() => insertQuestionRows(database, question, now));
+}
+
+/** Adds a question at the end of its own section, so the topic stays in section order. Returns it with its place. */
+export async function insertQuestionInSection(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<TopicQuestion> {
+  let placed: TopicQuestion = question;
   await database.withTransactionAsync(async () => {
-    await database.runAsync(
-      'INSERT INTO topic_questions (id, topic_id, question, answer, type, point, sorting_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      question.id,
-      question.topicId,
-      question.question,
-      identificationAnswer(question),
-      question.type,
-      question.point,
-      question.sortingOrder,
-    );
-    await insertAnswerRows(database, question);
-    await touchTopic(database, question.topicId, now);
+    const position = await findSectionEndOrder(database, question.topicId, question.type);
+    await makeRoomAt(database, question.topicId, position);
+    placed = { ...question, sortingOrder: position };
+    await insertQuestionRows(database, placed, now);
+  });
+  return placed;
+}
+
+/** Puts a deleted question back for Undo: same ids, in the place it had, with the others moved down to make room. */
+export async function restoreQuestion(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await makeRoomAt(database, question.topicId, question.sortingOrder);
+    await insertQuestionRows(database, question, now);
   });
 }
 
@@ -88,23 +128,35 @@ export async function insertQuestion(database: SQLiteDatabase, question: TopicQu
 export async function updateQuestion(database: SQLiteDatabase, question: TopicQuestion, now: number): Promise<boolean> {
   let isUpdated = false;
   await database.withTransactionAsync(async () => {
-    const result = await database.runAsync(
-      'UPDATE topic_questions SET question = ?, answer = ?, type = ?, point = ?, sorting_order = ? WHERE id = ? AND topic_id = ?',
-      question.question,
-      identificationAnswer(question),
-      question.type,
-      question.point,
-      question.sortingOrder,
-      question.id,
-      question.topicId,
-    );
-    if (result.changes === 0) return;
-    await deleteAnswerRows(database, question.id);
-    await insertAnswerRows(database, question);
-    await touchTopic(database, question.topicId, now);
-    isUpdated = true;
+    isUpdated = await updateQuestionRows(database, question, now);
   });
   return isUpdated;
+}
+
+/**
+ * Saves what the editor holds. The place is the database's to say, not the
+ * editor's (a Move may have happened since it was read): it stays where it is
+ * unless the type changed, and then the question goes to the end of its new
+ * section. Returns the question as saved, or null when it is gone.
+ */
+export async function saveEditedQuestion(database: SQLiteDatabase, edited: TopicQuestion, now: number): Promise<TopicQuestion | null> {
+  let saved: TopicQuestion | null = null;
+  await database.withTransactionAsync(async () => {
+    const current = await database.getFirstAsync<{ type: QuestionType; sorting_order: number }>(
+      'SELECT type, sorting_order FROM topic_questions WHERE id = ? AND topic_id = ?',
+      edited.id,
+      edited.topicId,
+    );
+    if (!current) return;
+    let sortingOrder = current.sorting_order;
+    if (current.type !== edited.type) {
+      sortingOrder = await findSectionEndOrder(database, edited.topicId, edited.type, edited.id);
+      await makeRoomAt(database, edited.topicId, sortingOrder);
+    }
+    const next: TopicQuestion = { ...edited, sortingOrder };
+    if (await updateQuestionRows(database, next, now)) saved = next;
+  });
+  return saved;
 }
 
 /** Deletes a question and returns it whole, so Undo can put it back with `insertQuestion`. */
@@ -165,7 +217,8 @@ export async function findNextSortingOrder(database: SQLiteDatabase, topicId: st
   return row?.next_order ?? 0;
 }
 
-async function attachAnswers(database: SQLiteDatabase, rows: QuestionRow[]): Promise<TopicQuestion[]> {
+/** Reads the keys for these question rows and joins them on, keeping the rows' order. */
+export async function attachAnswers(database: SQLiteDatabase, rows: QuestionRow[]): Promise<TopicQuestion[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const placeholders = buildPlaceholders(ids.length);

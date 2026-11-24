@@ -7,6 +7,8 @@ export type ExamChargeRequest = {
   idempotencyKey: string;
   examName: string;
   itemCount: number;
+  /** The caller's abort, e.g. when the screen closes. The key stays valid, so a later retry is safe. */
+  signal?: AbortSignal;
 };
 
 export type ExamCharge = {
@@ -42,6 +44,7 @@ export async function chargeExam(charge: ExamChargeRequest): Promise<ExamCharge>
   const payload = await requestResult<ExamChargePayload>('/exams/charge', {
     method: 'POST',
     body: { idempotency_key: charge.idempotencyKey, exam_name: charge.examName, item_count: charge.itemCount },
+    signal: charge.signal,
   });
   return {
     transactionId: payload.charge_id,

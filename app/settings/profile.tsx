@@ -42,7 +42,7 @@ export default function ProfileScreen() {
               <Text style={styles.previewMeta} numberOfLines={1}>
                 Picture saved on this phone only
               </Text>
-              <Pressable android_ripple={RIPPLE} style={({ pressed }) => [PRESS_CLIP, IOS && pressed && IOS_DIM]} accessibilityRole="button" hitSlop={6} onPress={editor.openPhotoMenu}>
+              <Pressable android_ripple={RIPPLE} style={({ pressed }) => [PRESS_CLIP, IOS && pressed && IOS_DIM]} accessibilityRole="button" hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} onPress={editor.openPhotoMenu}>
                 <Text style={styles.photoAction}>{editor.hasPhoto ? 'Change picture' : 'Add a picture'}</Text>
               </Pressable>
             </View>

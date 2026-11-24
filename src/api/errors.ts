@@ -68,3 +68,14 @@ export function isRequestCancelled(error: unknown): error is RequestCancelledErr
 export function hasApiErrorCode(error: unknown, code: ApiErrorCode): error is ApiError {
   return error instanceof ApiError && error.code === code;
 }
+
+/**
+ * The store (Google Play, the App Store, or the dev dummy store) could not
+ * take or start a purchase. The message is safe to show.
+ */
+export class StoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StoreError';
+  }
+}

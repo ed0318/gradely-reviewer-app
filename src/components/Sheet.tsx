@@ -17,7 +17,9 @@ export type SheetHandle = { expand: () => void; close: () => void };
  */
 export function useBackToClose(open: boolean, close: () => void) {
   const closeRef = useRef(close);
-  closeRef.current = close;
+  useEffect(() => {
+    closeRef.current = close;
+  });
   useEffect(() => {
     if (!open) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -59,7 +61,9 @@ export const Sheet = forwardRef<SheetHandle, Props>(({ children, onOpenChange },
   // every tap and scroll on the whole screen.
   const [sheetOpen, setSheetOpen] = useState(false);
   const onOpenChangeRef = useRef(onOpenChange);
-  onOpenChangeRef.current = onOpenChange;
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
   useEffect(() => {
     onOpenChangeRef.current?.(sheetOpen);
   }, [sheetOpen]);

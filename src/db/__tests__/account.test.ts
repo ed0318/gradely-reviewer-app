@@ -27,11 +27,11 @@ describe('profile', () => {
 });
 
 describe('settings', () => {
-  it('starts with the low-credit alert on at 10 credits', async () => {
+  it('starts with the low-credit alert on at 20 credits', async () => {
     const database = await openMigratedMemoryDatabase();
     expect(await getSettings(database)).toEqual({
       lowCreditAlertOn: true,
-      lowCreditThresholdUnits: 40,
+      lowCreditThresholdUnits: 80,
       lowCreditAlerted: false,
       balanceUnitsCache: null,
       balanceCheckedAt: null,

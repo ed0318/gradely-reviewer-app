@@ -54,7 +54,7 @@ export async function eraseAllLocalData(database: SQLiteDatabase): Promise<void>
     await database.runAsync('DELETE FROM topics');
     await database.runAsync('DELETE FROM profile');
     await database.runAsync(
-      `UPDATE settings SET low_credit_alert_on = 1, low_credit_threshold_units = 40, low_credit_alerted = 0,
+      `UPDATE settings SET low_credit_alert_on = 1, low_credit_threshold_units = 80, low_credit_alerted = 0,
               balance_units_cache = NULL, balance_checked_at = NULL WHERE id = 1`,
     );
   });

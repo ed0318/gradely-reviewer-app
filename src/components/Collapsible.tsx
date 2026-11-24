@@ -100,6 +100,7 @@ export function Collapsible({
       onPress={toggle}
       style={[header ? styles.customHeader : styles.header, { minHeight }, accessory ? styles.accessoryHeader : null]}
       accessibilityRole="button"
+      accessibilityState={{ expanded: isOpen }}
     >
       {header ?? (
         <>

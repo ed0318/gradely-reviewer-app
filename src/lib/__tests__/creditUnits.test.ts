@@ -26,7 +26,7 @@ describe('credit units', () => {
     expect(formatCredits(3)).toBe('0.75');
     expect(formatCredits(600)).toBe('150');
     expect(formatCredits(6_081)).toBe('1,520.25');
-    expect(formatCredits(-6)).toBe('-1.5');
+    expect(formatCredits(-6)).toBe('−1.5');
     expect(() => formatCredits(0.5)).toThrow(RangeError);
   });
 

@@ -42,7 +42,7 @@ describe('local data', () => {
     expect(await summarizeLocalData(database)).toEqual({ topicCount: 0, questionCount: 0, examCount: 0 });
     for (const [table, rows] of Object.entries(await readAllLocalTables(database))) expect(rows, table).toEqual([]);
     expect(await getProfile(database)).toBeNull();
-    expect(await getSettings(database)).toMatchObject({ balanceUnitsCache: null, lowCreditThresholdUnits: 40 });
+    expect(await getSettings(database)).toMatchObject({ balanceUnitsCache: null, lowCreditThresholdUnits: 80 });
   });
 
   it('saves the name and photo path on the profile', async () => {

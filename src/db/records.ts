@@ -5,7 +5,8 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export type DirectionsMode = 'template' | 'custom' | 'none';
 export type TopicSource = 'own' | 'marketplace';
-export type AttemptStatus = 'scheduled' | 'ready' | 'in_progress' | 'finished';
+/** `charging`: saved, and waiting for the server to take the credits. It is not an exam yet. */
+export type AttemptStatus = 'charging' | 'scheduled' | 'ready' | 'in_progress' | 'finished';
 
 export type Topic = {
   id: string;
@@ -61,6 +62,14 @@ export type ExamAttempt = {
   score: number | null;
   totalPoints: number | null;
   status: AttemptStatus;
+  /** A retake copies its questions from this attempt. Null: they come from the topic. */
+  sourceAttemptId: string | null;
+  /** Only the questions the source attempt got wrong. */
+  onlyMissed: boolean;
+  /** Index of the question on screen, so a killed exam resumes there. */
+  currentPosition: number;
+  /** Time taken in seconds, paused while the app is away. */
+  elapsedSeconds: number;
 };
 
 /** A choice as it was shown in the attempt, in shown order. */
@@ -86,6 +95,8 @@ export type AttemptAnswer = {
   givenAnswer: string | null;
   /** Null until an essay is self-marked. */
   isCorrect: boolean | null;
+  /** The "come back to this" mark. */
+  isFlagged: boolean;
 };
 
 export type Profile = {
